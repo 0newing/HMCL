@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,11 +13,10 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import com.jfoenix.controls.JFXButton;
 import com.jfoenix.controls.JFXPopup;
 import com.jfoenix.controls.JFXRadioButton;
@@ -33,6 +32,7 @@ import org.jackhuang.hmcl.ui.construct.IconedMenuItem;
 import org.jackhuang.hmcl.ui.construct.MenuSeparator;
 import org.jackhuang.hmcl.ui.construct.PopupMenu;
 
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public class GameListItemSkin extends SkinBase<GameListItem> {
@@ -73,7 +73,7 @@ public class GameListItemSkin extends SkinBase<GameListItem> {
             btnUpgrade.setOnMouseClicked(e -> skinnable.update());
             btnUpgrade.getStyleClass().add("toggle-icon4");
             btnUpgrade.setGraphic(SVG.update(Theme.blackFillBinding(), -1, -1));
-            JFXUtilities.runInFX(() -> FXUtils.installTooltip(btnUpgrade, i18n("version.update")));
+            runInFX(() -> FXUtils.installFastTooltip(btnUpgrade, i18n("version.update")));
             right.getChildren().add(btnUpgrade);
         }
 

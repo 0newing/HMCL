@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,12 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.setting;
 
 import com.google.gson.*;
-import com.jfoenix.concurrency.JFXUtilities;
+import com.google.gson.annotations.JsonAdapter;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
@@ -30,11 +30,8 @@ import org.jackhuang.hmcl.event.RefreshedVersionsEvent;
 import org.jackhuang.hmcl.game.HMCLCacheRepository;
 import org.jackhuang.hmcl.game.HMCLGameRepository;
 import org.jackhuang.hmcl.game.Version;
-import org.jackhuang.hmcl.mod.ModManager;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
-import org.jackhuang.hmcl.util.*;
-import org.jackhuang.hmcl.util.javafx.ImmediateObjectProperty;
-import org.jackhuang.hmcl.util.javafx.ImmediateStringProperty;
+import org.jackhuang.hmcl.util.ToStringBuilder;
 import org.jackhuang.hmcl.util.javafx.ObservableHelper;
 
 import java.io.File;
@@ -42,15 +39,16 @@ import java.lang.reflect.Type;
 import java.util.Optional;
 
 import static org.jackhuang.hmcl.ui.FXUtils.onInvalidating;
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 
 /**
  *
  * @author huangyuhui
  */
+@JsonAdapter(Profile.Serializer.class)
 public final class Profile implements Observable {
     private final WeakListenerHolder listenerHolder = new WeakListenerHolder();
     private final HMCLGameRepository repository;
-    private final ModManager modManager;
 
     private final StringProperty selectedVersion = new SimpleStringProperty();
 
@@ -90,9 +88,9 @@ public final class Profile implements Observable {
         return global.get();
     }
 
-    private final ImmediateStringProperty name;
+    private final SimpleStringProperty name;
 
-    public ImmediateStringProperty nameProperty() {
+    public StringProperty nameProperty() {
         return name;
     }
 
@@ -131,10 +129,9 @@ public final class Profile implements Observable {
     }
 
     public Profile(String name, File initialGameDir, VersionSetting global, String selectedVersion, boolean useRelativePath) {
-        this.name = new ImmediateStringProperty(this, "name", name);
-        gameDir = new ImmediateObjectProperty<>(this, "gameDir", initialGameDir);
+        this.name = new SimpleStringProperty(this, "name", name);
+        gameDir = new SimpleObjectProperty<>(this, "gameDir", initialGameDir);
         repository = new HMCLGameRepository(this, initialGameDir);
-        modManager = new ModManager(repository);
         this.global.set(global == null ? new VersionSetting() : global);
         this.selectedVersion.set(selectedVersion);
         this.useRelativePath.set(useRelativePath);
@@ -147,7 +144,7 @@ public final class Profile implements Observable {
     }
 
     private void checkSelectedVersion() {
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             if (!repository.isLoaded()) return;
             String newValue = selectedVersion.get();
             if (!repository.hasVersion(newValue)) {
@@ -162,10 +159,6 @@ public final class Profile implements Observable {
 
     public HMCLGameRepository getRepository() {
         return repository;
-    }
-
-    public ModManager getModManager() {
-        return modManager;
     }
 
     public DefaultDependencyManager getDependency() {
@@ -217,11 +210,6 @@ public final class Profile implements Observable {
     }
 
     public static final class Serializer implements JsonSerializer<Profile>, JsonDeserializer<Profile> {
-        public static final Serializer INSTANCE = new Serializer();
-
-        private Serializer() {
-        }
-
         @Override
         public JsonElement serialize(Profile src, Type typeOfSrc, JsonSerializationContext context) {
             if (src == null)
@@ -238,7 +226,7 @@ public final class Profile implements Observable {
 
         @Override
         public Profile deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
-            if (json == null || json == JsonNull.INSTANCE || !(json instanceof JsonObject)) return null;
+            if (json == JsonNull.INSTANCE || !(json instanceof JsonObject)) return null;
             JsonObject obj = (JsonObject) json;
             String gameDir = Optional.ofNullable(obj.get("gameDir")).map(JsonElement::getAsString).orElse("");
 

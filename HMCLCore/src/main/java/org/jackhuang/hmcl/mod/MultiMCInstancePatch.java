@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,13 +13,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
 import com.google.gson.annotations.SerializedName;
 import org.jackhuang.hmcl.game.Library;
 import org.jackhuang.hmcl.util.Immutable;
+import org.jackhuang.hmcl.util.Lang;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,19 +45,23 @@ public final class MultiMCInstancePatch {
     private final List<String> tweakers;
 
     @SerializedName("+libraries")
+    private final List<Library> _libraries;
+
+    @SerializedName("libraries")
     private final List<Library> libraries;
 
     public MultiMCInstancePatch() {
-        this("", "", "", "", "", Collections.emptyList(), Collections.emptyList());
+        this("", "", "", "", "", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
     }
 
-    public MultiMCInstancePatch(String name, String version, String gameVersion, String mainClass, String fileId, List<String> tweakers, List<Library> libraries) {
+    public MultiMCInstancePatch(String name, String version, String gameVersion, String mainClass, String fileId, List<String> tweakers, List<Library> _libraries, List<Library> libraries) {
         this.name = name;
         this.version = version;
         this.gameVersion = gameVersion;
         this.mainClass = mainClass;
         this.fileId = fileId;
         this.tweakers = new ArrayList<>(tweakers);
+        this._libraries = new ArrayList<>(_libraries);
         this.libraries = new ArrayList<>(libraries);
     }
 
@@ -85,7 +90,7 @@ public final class MultiMCInstancePatch {
     }
 
     public List<Library> getLibraries() {
-        return Collections.unmodifiableList(libraries);
+        return Lang.merge(_libraries, libraries);
     }
 
 }

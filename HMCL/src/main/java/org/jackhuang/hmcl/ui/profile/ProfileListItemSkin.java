@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.profile;
 
@@ -22,7 +22,6 @@ import com.jfoenix.controls.JFXRadioButton;
 import com.jfoenix.effects.JFXDepthManager;
 import javafx.geometry.Pos;
 import javafx.scene.control.SkinBase;
-import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
@@ -30,6 +29,8 @@ import org.jackhuang.hmcl.setting.Theme;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.construct.TwoLineListItem;
+
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 
 public class ProfileListItemSkin extends SkinBase<ProfileListItem> {
 
@@ -54,7 +55,7 @@ public class ProfileListItemSkin extends SkinBase<ProfileListItem> {
 
         ImageView imageView = new ImageView();
         FXUtils.limitSize(imageView, 32, 32);
-        imageView.imageProperty().set(new Image("/assets/img/craft_table.png"));
+        imageView.imageProperty().set(newImage("/assets/img/craft_table.png"));
 
         TwoLineListItem item = new TwoLineListItem();
         BorderPane.setAlignment(item, Pos.CENTER);

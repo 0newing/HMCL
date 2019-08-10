@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.decorator;
 
@@ -40,16 +40,17 @@ import javafx.util.Duration;
 import org.jackhuang.hmcl.Launcher;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorDnD;
-import org.jackhuang.hmcl.setting.ConfigHolder;
+import org.jackhuang.hmcl.setting.Config;
 import org.jackhuang.hmcl.setting.EnumBackgroundImage;
-import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.account.AddAuthlibInjectorServerPane;
-import org.jackhuang.hmcl.ui.construct.*;
+import org.jackhuang.hmcl.ui.construct.DialogAware;
+import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
+import org.jackhuang.hmcl.ui.construct.Navigator;
+import org.jackhuang.hmcl.ui.construct.StackContainerPane;
 import org.jackhuang.hmcl.ui.wizard.Refreshable;
 import org.jackhuang.hmcl.ui.wizard.WizardProvider;
-import org.jackhuang.hmcl.util.FutureCallback;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -59,11 +60,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import static java.util.stream.Collectors.toList;
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 import static org.jackhuang.hmcl.util.Logging.LOG;
 
 public class DecoratorController {
@@ -84,9 +85,10 @@ public class DecoratorController {
         decorator.titleProperty().set(Metadata.TITLE);
         decorator.setOnCloseButtonAction(Launcher::stopApplication);
 
-        navigator = new Navigator(mainPage);
+        navigator = new Navigator();
         navigator.setOnNavigating(this::onNavigating);
         navigator.setOnNavigated(this::onNavigated);
+        navigator.init(mainPage);
 
         decorator.getContent().setAll(navigator);
         decorator.onCloseNavButtonActionProperty().set(e -> close());
@@ -94,7 +96,7 @@ public class DecoratorController {
         decorator.onRefreshNavButtonActionProperty().set(e -> refresh());
 
         welcomeView = new ImageView();
-        welcomeView.setImage(new Image("/assets/img/welcome.png"));
+        welcomeView.setImage(newImage("/assets/img/welcome.png"));
         welcomeView.setCursor(Cursor.HAND);
         FXUtils.limitSize(welcomeView, 796, 517);
         welcomeView.setOnMouseClicked(e -> {
@@ -107,9 +109,11 @@ public class DecoratorController {
             nowAnimation.play();
         });
 
-        if (ConfigHolder.config().getUiVersion() < Controllers.UI_VERSION && config().getLocalization().getLocale() == Locale.CHINA) {
-            ConfigHolder.config().setUiVersion(Controllers.UI_VERSION);
-            decorator.getContainer().setAll(welcomeView);
+        if (switchedToNewUI()) {
+            if (config().getLocalization().getLocale() == Locale.CHINA) {
+                // currently, user guide is only available in Chinese
+                decorator.getContainer().setAll(welcomeView);
+            }
         }
 
         setupBackground();
@@ -119,6 +123,17 @@ public class DecoratorController {
 
     public Decorator getDecorator() {
         return decorator;
+    }
+
+    /**
+     * @return true if the user is seeing the current version of UI for the first time.
+     */
+    private boolean switchedToNewUI() {
+        if (config().getUiVersion() < Config.CURRENT_UI_VERSION) {
+            config().setUiVersion(Config.CURRENT_UI_VERSION);
+            return true;
+        }
+        return false;
     }
 
     // ==== Background ====
@@ -141,7 +156,7 @@ public class DecoratorController {
                         config().backgroundImageProperty()));
     }
 
-    private Image defaultBackground = new Image("/assets/img/background.jpg");
+    private Image defaultBackground = newImage("/assets/img/background.jpg");
 
     /**
      * Load background image from bg/, background.png, background.jpg
@@ -343,45 +358,6 @@ public class DecoratorController {
                 dialogPane = null;
             }
         }
-    }
-
-    public void showDialog(String text) {
-        showDialog(text, null);
-    }
-
-    public void showDialog(String text, String title) {
-        showDialog(text, title, MessageBox.INFORMATION_MESSAGE);
-    }
-
-    public void showDialog(String text, String title, int type) {
-        showDialog(text, title, type, null);
-    }
-
-    public void showDialog(String text, String title, int type, Runnable onAccept) {
-        showDialog(new MessageDialogPane(text, title, type, onAccept));
-    }
-
-    public void showConfirmDialog(String text, String title, Runnable onAccept, Runnable onCancel) {
-        showDialog(new MessageDialogPane(text, title, onAccept, onCancel));
-    }
-
-    public InputDialogPane showInputDialog(String text, FutureCallback<String> onResult) {
-        InputDialogPane pane = new InputDialogPane(text, onResult);
-        showDialog(pane);
-        return pane;
-    }
-
-    public Region showTaskDialog(TaskExecutor executor, String title, String subtitle) {
-        return showTaskDialog(executor, title, subtitle, null);
-    }
-
-    public Region showTaskDialog(TaskExecutor executor, String title, String subtitle, Consumer<Region> onCancel) {
-        TaskExecutorDialogPane pane = new TaskExecutorDialogPane(onCancel);
-        pane.setTitle(title);
-        pane.setSubtitle(subtitle);
-        pane.setExecutor(executor);
-        showDialog(pane);
-        return pane;
     }
 
     // ==== Wizard ====

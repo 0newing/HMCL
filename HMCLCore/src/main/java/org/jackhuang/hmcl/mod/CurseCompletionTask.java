@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,12 +13,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
+import com.google.gson.JsonParseException;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
-import org.jackhuang.hmcl.game.GameRepository;
+import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.*;
@@ -32,7 +33,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -43,14 +43,14 @@ import java.util.stream.Collectors;
  *
  * @author huangyuhui
  */
-public final class CurseCompletionTask extends Task {
+public final class CurseCompletionTask extends Task<Void> {
 
-    private final DefaultDependencyManager dependencyManager;
-    private final GameRepository repository;
+    private final DefaultGameRepository repository;
+    private final ModManager modManager;
     private final String version;
-    private CurseManifest manifest = null;
-    private final List<Task> dependents = new LinkedList<>();
-    private final List<Task> dependencies = new LinkedList<>();
+    private CurseManifest manifest;
+    private final List<Task<?>> dependents = new LinkedList<>();
+    private final List<Task<?>> dependencies = new LinkedList<>();
 
     /**
      * Constructor.
@@ -70,8 +70,8 @@ public final class CurseCompletionTask extends Task {
      * @param manifest          the CurseForgeModpack manifest.
      */
     public CurseCompletionTask(DefaultDependencyManager dependencyManager, String version, CurseManifest manifest) {
-        this.dependencyManager = dependencyManager;
         this.repository = dependencyManager.getGameRepository();
+        this.modManager = repository.getModManager(version);
         this.version = version;
         this.manifest = manifest;
 
@@ -86,12 +86,12 @@ public final class CurseCompletionTask extends Task {
     }
 
     @Override
-    public Collection<Task> getDependencies() {
+    public Collection<Task<?>> getDependencies() {
         return dependencies;
     }
 
     @Override
-    public Collection<Task> getDependents() {
+    public Collection<Task<?>> getDependents() {
         return dependents;
     }
 
@@ -101,7 +101,6 @@ public final class CurseCompletionTask extends Task {
             return;
 
         File root = repository.getVersionRoot(version);
-        File run = repository.getRunDirectory(version);
 
         AtomicBoolean flag = new AtomicBoolean(true);
         AtomicInteger finished = new AtomicInteger(0);
@@ -117,8 +116,16 @@ public final class CurseCompletionTask extends Task {
                                 try {
                                     return file.withFileName(NetworkUtils.detectFileName(file.getUrl()));
                                 } catch (FileNotFoundException e) {
-                                    notFound.set(true);
-                                    return file;
+                                    try {
+                                        String result = NetworkUtils.doGet(NetworkUtils.toURL(String.format("https://cursemeta.dries007.net/%d/%d.json", file.getProjectID(), file.getFileID())));
+                                        CurseMetaMod mod = JsonUtils.fromNonNullJson(result, CurseMetaMod.class);
+                                        return file.withFileName(mod.getFileNameOnDisk()).withURL(mod.getDownloadURL());
+                                    } catch (IOException | JsonParseException e2) {
+                                        Logging.LOG.log(Level.WARNING, "Could not query cursemeta for deleted mods: " + file.getUrl(), e2);
+                                        notFound.set(true);
+                                        return file;
+                                    }
+
                                 } catch (IOException ioe) {
                                     Logging.LOG.log(Level.WARNING, "Unable to fetch the file name of URL: " + file.getUrl(), ioe);
                                     flag.set(false);
@@ -132,15 +139,15 @@ public final class CurseCompletionTask extends Task {
 
         for (CurseManifestFile file : newManifest.getFiles())
             if (StringUtils.isNotBlank(file.getFileName())) {
-                File dest = new File(run, "mods/" + file.getFileName());
-                if (!dest.exists())
-                    dependencies.add(new FileDownloadTask(file.getUrl(), dest));
+                if (!modManager.hasSimpleMod(file.getFileName())) {
+                    dependencies.add(new FileDownloadTask(file.getUrl(), modManager.getSimpleModPath(file.getFileName()).toFile()).setCaching(true));
+                }
             }
 
         // Let this task fail if the curse manifest has not been completed.
         // But continue other downloads.
         if (!flag.get() || notFound.get())
-            dependencies.add(Task.of(() -> {
+            dependencies.add(Task.runAsync(() -> {
                 if (notFound.get())
                     throw new CurseCompletionException(new FileNotFoundException());
                 else

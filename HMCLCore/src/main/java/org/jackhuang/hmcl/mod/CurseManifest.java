@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,19 +13,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
 import com.google.gson.JsonParseException;
 import com.google.gson.annotations.SerializedName;
-
 import org.jackhuang.hmcl.util.Immutable;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -117,11 +117,11 @@ public final class CurseManifest {
      * @throws JsonParseException if the manifest.json is missing or malformed.
      * @return the manifest.
      */
-    public static Modpack readCurseForgeModpackManifest(File f) throws IOException, JsonParseException {
-        String json = CompressingUtils.readTextZipEntry(f, "manifest.json");
+    public static Modpack readCurseForgeModpackManifest(Path zip, Charset encoding) throws IOException, JsonParseException {
+        String json = CompressingUtils.readTextZipEntry(zip, "manifest.json", encoding);
         CurseManifest manifest = JsonUtils.fromNonNullJson(json, CurseManifest.class);
         return new Modpack(manifest.getName(), manifest.getAuthor(), manifest.getVersion(), manifest.getMinecraft().getGameVersion(),
-                CompressingUtils.readTextZipEntryQuietly(f, "modlist.html").orElse( "No description"), manifest);
+                CompressingUtils.readTextZipEntryQuietly(zip, "modlist.html", encoding).orElse( "No description"), encoding, manifest);
     }
 
     public static final String MINECRAFT_MODPACK = "minecraftModpack";

@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,10 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.i18n;
 
+import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import org.jackhuang.hmcl.util.Lang;
@@ -46,20 +47,11 @@ public final class Locales {
     public static final SupportedLocale ZH_CN = new SupportedLocale(Locale.SIMPLIFIED_CHINESE);
 
     /**
-     * Vietnamese
+     * Spanish
      */
-    public static final SupportedLocale VI = new SupportedLocale(new Locale("vi"));
+    public static final SupportedLocale ES = new SupportedLocale(new Locale("es"));
 
-    /**
-     * Russian
-     */
-    public static final SupportedLocale RU = new SupportedLocale(new Locale("ru"));
-
-    public static final List<SupportedLocale> LOCALES = Lang.immutableListOf(DEFAULT, EN, ZH_CN, ZH);
-
-    public static SupportedLocale getLocale(int index) {
-        return Lang.get(LOCALES, index).orElse(DEFAULT);
-    }
+    public static final List<SupportedLocale> LOCALES = Lang.immutableListOf(DEFAULT, EN, ZH_CN, ZH, ES);
 
     public static SupportedLocale getLocaleByName(String name) {
         if (name == null) return DEFAULT;
@@ -67,8 +59,7 @@ public final class Locales {
             case "en": return EN;
             case "zh": return ZH;
             case "zh_cn": return ZH_CN;
-            case "vi": return VI;
-            case "ru": return RU;
+            case "es": return ES;
             default: return DEFAULT;
         }
     }
@@ -77,12 +68,12 @@ public final class Locales {
         if (locale == EN) return "en";
         else if (locale == ZH) return "zh";
         else if (locale == ZH_CN) return "zh_CN";
-        else if (locale == VI) return "vi";
-        else if (locale == RU) return "ru";
+        else if (locale == ES) return "es";
         else if (locale == DEFAULT) return "def";
         else throw new IllegalArgumentException("Unknown locale: " + locale);
     }
 
+    @JsonAdapter(SupportedLocale.TypeAdapter.class)
     public static class SupportedLocale {
         private final Locale locale;
         private final String name;

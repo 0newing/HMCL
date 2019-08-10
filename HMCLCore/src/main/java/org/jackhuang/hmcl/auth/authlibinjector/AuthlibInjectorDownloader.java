@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.auth.authlibinjector;
 
@@ -32,18 +32,16 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.jar.Attributes;
-import java.util.jar.JarFile;
 import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.util.Logging.LOG;
 
-public class AuthlibInjectorDownloader {
+public class AuthlibInjectorDownloader implements AuthlibInjectorArtifactProvider {
 
     private static final String LATEST_BUILD_URL = "https://authlib-injector.yushi.moe/artifact/latest.json";
 
-    private Path artifactLocation;
-    private Supplier<DownloadProvider> downloadProvider;
+    private final Path artifactLocation;
+    private final Supplier<DownloadProvider> downloadProvider;
 
     /**
      * The flag will be reset after application restart.
@@ -58,6 +56,7 @@ public class AuthlibInjectorDownloader {
         this.downloadProvider = downloadProvider;
     }
 
+    @Override
     public AuthlibInjectorArtifactInfo getArtifactInfo() throws IOException {
         synchronized (artifactLocation) {
             Optional<AuthlibInjectorArtifactInfo> local = getLocalArtifact();
@@ -77,6 +76,11 @@ public class AuthlibInjectorDownloader {
 
             return getLocalArtifact().orElseThrow(() -> new IOException("The updated authlib-inejector cannot be recognized"));
         }
+    }
+
+    @Override
+    public Optional<AuthlibInjectorArtifactInfo> getArtifactInfoImmediately() {
+        return getLocalArtifact();
     }
 
     private void update(Optional<AuthlibInjectorArtifactInfo> local) throws IOException {
@@ -116,39 +120,14 @@ public class AuthlibInjectorDownloader {
             return Optional.empty();
         }
         try {
-            return Optional.of(readArtifactInfo(artifactLocation));
+            return Optional.of(AuthlibInjectorArtifactInfo.from(artifactLocation));
         } catch (IOException e) {
             LOG.log(Level.WARNING, "Bad authlib-injector artifact", e);
             return Optional.empty();
         }
     }
 
-    private static AuthlibInjectorArtifactInfo readArtifactInfo(Path location) throws IOException {
-        try (JarFile jarFile = new JarFile(location.toFile())) {
-            Attributes attributes = jarFile.getManifest().getMainAttributes();
-
-            String title = Optional.ofNullable(attributes.getValue("Implementation-Title"))
-                    .orElseThrow(() -> new IOException("Missing Implementation-Title"));
-            if (!"authlib-injector".equals(title)) {
-                throw new IOException("Bad Implementation-Title");
-            }
-
-            String version = Optional.ofNullable(attributes.getValue("Implementation-Version"))
-                    .orElseThrow(() -> new IOException("Missing Implementation-Version"));
-
-            int buildNumber;
-            try {
-                buildNumber = Optional.ofNullable(attributes.getValue("Build-Number"))
-                        .map(Integer::parseInt)
-                        .orElseThrow(() -> new IOException("Missing Build-Number"));
-            } catch (NumberFormatException e) {
-                throw new IOException("Bad Build-Number", e);
-            }
-            return new AuthlibInjectorArtifactInfo(buildNumber, version, location.toAbsolutePath());
-        }
-    }
-
-    private class AuthlibInjectorVersionInfo {
+    private static class AuthlibInjectorVersionInfo {
         @SerializedName("build_number")
         public int buildNumber;
 

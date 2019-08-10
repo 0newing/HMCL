@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download.game;
 
@@ -24,14 +24,13 @@ import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
-import java.io.IOException;
 
 /**
  * This task is to save the version json.
  *
  * @author huangyuhui
  */
-public final class VersionJsonSaveTask extends Task {
+public final class VersionJsonSaveTask extends Task<Version> {
 
     private final DefaultGameRepository repository;
     private final Version version;
@@ -47,13 +46,12 @@ public final class VersionJsonSaveTask extends Task {
         this.version = version;
 
         setSignificance(TaskSignificance.MODERATE);
+        setResult(version);
     }
 
     @Override
     public void execute() throws Exception {
         File json = repository.getVersionJson(version.getId()).getAbsoluteFile();
-        if (!FileUtils.makeFile(json))
-            throw new IOException("Cannot create file " + json);
         FileUtils.writeText(json, JsonUtils.GSON.toJson(version));
     }
 }

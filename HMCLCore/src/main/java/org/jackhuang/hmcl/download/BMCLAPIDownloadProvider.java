@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,11 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
-import org.jackhuang.hmcl.download.forge.ForgeVersionList;
+import org.jackhuang.hmcl.download.forge.ForgeBMCLVersionList;
 import org.jackhuang.hmcl.download.game.GameVersionList;
 import org.jackhuang.hmcl.download.liteloader.LiteLoaderBMCLVersionList;
 import org.jackhuang.hmcl.download.optifine.OptiFineBMCLVersionList;
@@ -44,7 +44,7 @@ public class BMCLAPIDownloadProvider implements DownloadProvider {
             case "game":
                 return GameVersionList.INSTANCE;
             case "forge":
-                return ForgeVersionList.INSTANCE;
+                return ForgeBMCLVersionList.INSTANCE;
             case "liteloader":
                 return LiteLoaderBMCLVersionList.INSTANCE;
             case "optifine":
@@ -59,8 +59,8 @@ public class BMCLAPIDownloadProvider implements DownloadProvider {
         return baseURL
                 .replace("https://launchermeta.mojang.com", "https://bmclapi2.bangbang93.com")
                 .replace("https://launcher.mojang.com", "https://bmclapi2.bangbang93.com")
-                .replace("https://libraries.minecraft.net", "http://bmclapi2.bangbang93.com/libraries")
-                .replaceFirst("https?://files\\.minecraftforge\\.net/maven", "http://bmclapi2.bangbang93.com/maven")
+                .replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/libraries")
+                .replaceFirst("https?://files\\.minecraftforge\\.net/maven", "https://bmclapi2.bangbang93.com/maven")
                 .replace("http://dl.liteloader.com/versions/versions.json", "https://bmclapi2.bangbang93.com/maven/com/mumfrey/liteloader/versions.json")
                 .replace("http://dl.liteloader.com/versions", "https://bmclapi2.bangbang93.com/maven")
                 .replace("https://authlib-injector.yushi.moe", "https://bmclapi2.bangbang93.com/mirrors/authlib-injector");

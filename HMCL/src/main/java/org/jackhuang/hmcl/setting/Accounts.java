@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.setting;
 
@@ -29,16 +29,19 @@ import org.jackhuang.hmcl.auth.AccountFactory;
 import org.jackhuang.hmcl.auth.AuthenticationException;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccount;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccountFactory;
+import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorArtifactProvider;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorDownloader;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorServer;
+import org.jackhuang.hmcl.auth.authlibinjector.SimpleAuthlibInjectorArtifactProvider;
 import org.jackhuang.hmcl.auth.offline.OfflineAccount;
 import org.jackhuang.hmcl.auth.offline.OfflineAccountFactory;
-import org.jackhuang.hmcl.auth.yggdrasil.MojangYggdrasilProvider;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilAccount;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilAccountFactory;
 import org.jackhuang.hmcl.task.Schedulers;
 
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -59,37 +62,40 @@ public final class Accounts {
     private Accounts() {}
 
     public static final OfflineAccountFactory FACTORY_OFFLINE = OfflineAccountFactory.INSTANCE;
-    public static final YggdrasilAccountFactory FACTORY_YGGDRASIL = new YggdrasilAccountFactory(MojangYggdrasilProvider.INSTANCE);
-    public static final AuthlibInjectorAccountFactory FACTORY_AUTHLIB_INJECTOR = new AuthlibInjectorAccountFactory(
-            new AuthlibInjectorDownloader(Metadata.HMCL_DIRECTORY, DownloadProviders::getDownloadProvider)::getArtifactInfo,
-            Accounts::getOrCreateAuthlibInjectorServer);
+    public static final YggdrasilAccountFactory FACTORY_MOJANG = YggdrasilAccountFactory.MOJANG;
+    public static final AuthlibInjectorAccountFactory FACTORY_AUTHLIB_INJECTOR = new AuthlibInjectorAccountFactory(createAuthlibInjectorArtifactProvider(), Accounts::getOrCreateAuthlibInjectorServer);
 
-    private static final String TYPE_OFFLINE = "offline";
-    private static final String TYPE_YGGDRASIL_ACCOUNT = "yggdrasil";
-    private static final String TYPE_AUTHLIB_INJECTOR = "authlibInjector";
+    // ==== login type / account factory mapping ====
+    private static final Map<String, AccountFactory<?>> type2factory = new HashMap<>();
+    private static final Map<AccountFactory<?>, String> factory2type = new HashMap<>();
+    static {
+        type2factory.put("offline", FACTORY_OFFLINE);
+        type2factory.put("yggdrasil", FACTORY_MOJANG);
+        type2factory.put("authlibInjector", FACTORY_AUTHLIB_INJECTOR);
 
-    private static Map<String, AccountFactory<?>> type2factory = mapOf(
-            pair(TYPE_OFFLINE, FACTORY_OFFLINE),
-            pair(TYPE_YGGDRASIL_ACCOUNT, FACTORY_YGGDRASIL),
-            pair(TYPE_AUTHLIB_INJECTOR, FACTORY_AUTHLIB_INJECTOR));
-
-    private static String accountType(Account account) {
-        if (account instanceof OfflineAccount)
-            return TYPE_OFFLINE;
-        else if (account instanceof AuthlibInjectorAccount)
-            return TYPE_AUTHLIB_INJECTOR;
-        else if (account instanceof YggdrasilAccount)
-            return TYPE_YGGDRASIL_ACCOUNT;
-        else
-            throw new IllegalArgumentException("Failed to determine account type: " + account);
+        type2factory.forEach((type, factory) -> factory2type.put(factory, type));
     }
+
+    public static String getLoginType(AccountFactory<?> factory) {
+        return Optional.ofNullable(factory2type.get(factory))
+                .orElseThrow(() -> new IllegalArgumentException("Unrecognized account factory"));
+    }
+
+    public static AccountFactory<?> getAccountFactory(String loginType) {
+        return Optional.ofNullable(type2factory.get(loginType))
+                .orElseThrow(() -> new IllegalArgumentException("Unrecognized login type"));
+    }
+    // ====
 
     public static AccountFactory<?> getAccountFactory(Account account) {
-        return type2factory.get(accountType(account));
-    }
-
-    static String accountId(Account account) {
-        return account.getUsername() + ":" + account.getCharacter();
+        if (account instanceof OfflineAccount)
+            return FACTORY_OFFLINE;
+        else if (account instanceof AuthlibInjectorAccount)
+            return FACTORY_AUTHLIB_INJECTOR;
+        else if (account instanceof YggdrasilAccount)
+            return FACTORY_MOJANG;
+        else
+            throw new IllegalArgumentException("Failed to determine account type: " + account);
     }
 
     private static ObservableList<Account> accounts = observableArrayList(account -> new Observable[] { account });
@@ -126,7 +132,7 @@ public final class Accounts {
             // selection is valid, store it
             if (!initialized)
                 return;
-            config().setSelectedAccount(selected == null ? "" : accountId(selected));
+            updateAccountStorages();
         }
     };
 
@@ -139,9 +145,12 @@ public final class Accounts {
         accounts.addListener(onInvalidating(Accounts::updateAccountStorages));
     }
 
-    static Map<Object, Object> getAccountStorage(Account account) {
+    private static Map<Object, Object> getAccountStorage(Account account) {
         Map<Object, Object> storage = account.toStorage();
-        storage.put("type", accountType(account));
+        storage.put("type", getLoginType(getAccountFactory(account)));
+        if (account == selectedAccount.get()) {
+            storage.put("selected", true);
+        }
         return storage;
     }
 
@@ -176,27 +185,38 @@ public final class Accounts {
                 return;
             }
             accounts.add(account);
+
+            if (Boolean.TRUE.equals(storage.get("selected"))) {
+                selectedAccount.set(account);
+            }
         });
 
         initialized = true;
 
         config().getAuthlibInjectorServers().addListener(onInvalidating(Accounts::removeDanglingAuthlibInjectorAccounts));
 
-        // load selected account
-        Account selected = accounts.stream()
-                .filter(it -> accountId(it).equals(config().getSelectedAccount()))
-                .findFirst()
-                .orElse(null);
-        selectedAccount.set(selected);
-
-        Schedulers.io().schedule(() -> {
-            if (selected != null)
+        Account selected = selectedAccount.get();
+        if (selected != null) {
+            Schedulers.io().execute(() -> {
                 try {
                     selected.logIn();
                 } catch (AuthenticationException e) {
                     LOG.log(Level.WARNING, "Failed to log " + selected + " in", e);
                 }
-        });
+            });
+        }
+
+        for (AuthlibInjectorServer server : config().getAuthlibInjectorServers()) {
+            if (selected instanceof AuthlibInjectorAccount && ((AuthlibInjectorAccount) selected).getServer() == server)
+                continue;
+            Schedulers.io().execute(() -> {
+                try {
+                    server.fetchMetadataResponse();
+                } catch (IOException e) {
+                    LOG.log(Level.WARNING, "Failed to fetch authlib-injector server metdata: " + server, e);
+                }
+            });
+        }
     }
 
     public static ObservableList<Account> getAccounts() {
@@ -220,21 +240,22 @@ public final class Accounts {
     }
 
     // ==== authlib-injector ====
+    private static AuthlibInjectorArtifactProvider createAuthlibInjectorArtifactProvider() {
+        String authlibinjectorLocation = System.getProperty("hmcl.authlibinjector.location");
+        if (authlibinjectorLocation == null) {
+            return new AuthlibInjectorDownloader(Metadata.HMCL_DIRECTORY, DownloadProviders::getDownloadProvider);
+        } else {
+            LOG.info("Using specified authlib-injector: " + authlibinjectorLocation);
+            return new SimpleAuthlibInjectorArtifactProvider(Paths.get(authlibinjectorLocation));
+        }
+    }
+
     private static AuthlibInjectorServer getOrCreateAuthlibInjectorServer(String url) {
         return config().getAuthlibInjectorServers().stream()
                 .filter(server -> url.equals(server.getUrl()))
                 .findFirst()
                 .orElseGet(() -> {
-                    // this usually happens when migrating data from an older version
-                    AuthlibInjectorServer server;
-                    try {
-                        server = AuthlibInjectorServer.fetchServerInfo(url);
-                        LOG.info("Migrated authlib injector server " + server);
-                    } catch (IOException e) {
-                        server = new AuthlibInjectorServer(url, url);
-                        LOG.log(Level.WARNING, "Failed to migrate authlib injector server " + url, e);
-                    }
-
+                    AuthlibInjectorServer server = new AuthlibInjectorServer(url);
                     config().getAuthlibInjectorServers().add(server);
                     return server;
                 });
@@ -255,18 +276,14 @@ public final class Accounts {
     // ====
 
     // ==== Login type name i18n ===
-    private static Map<AccountFactory<?>, String> loginType2name = mapOf(
-            pair(Accounts.FACTORY_OFFLINE, i18n("account.methods.offline")),
-            pair(Accounts.FACTORY_YGGDRASIL, i18n("account.methods.yggdrasil")),
-            pair(Accounts.FACTORY_AUTHLIB_INJECTOR, i18n("account.methods.authlib_injector")));
+    private static Map<AccountFactory<?>, String> unlocalizedLoginTypeNames = mapOf(
+            pair(Accounts.FACTORY_OFFLINE, "account.methods.offline"),
+            pair(Accounts.FACTORY_MOJANG, "account.methods.yggdrasil"),
+            pair(Accounts.FACTORY_AUTHLIB_INJECTOR, "account.methods.authlib_injector"));
 
-    public static String getAccountTypeName(AccountFactory<?> factory) {
-        return Optional.ofNullable(loginType2name.get(factory))
-                .orElseThrow(() -> new IllegalArgumentException("No corresponding login type name"));
-    }
-
-    public static String getAccountTypeName(Account account) {
-        return getAccountTypeName(getAccountFactory(account));
+    public static String getLocalizedLoginTypeName(AccountFactory<?> factory) {
+        return i18n(Optional.ofNullable(unlocalizedLoginTypeNames.get(factory))
+                .orElseThrow(() -> new IllegalArgumentException("Unrecognized account factory")));
     }
     // ====
 }

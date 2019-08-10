@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.download;
 
@@ -27,16 +27,19 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import org.jackhuang.hmcl.game.ModpackHelper;
 import org.jackhuang.hmcl.mod.Modpack;
-import org.jackhuang.hmcl.mod.UnsupportedModpackException;
 import org.jackhuang.hmcl.setting.Profile;
+import org.jackhuang.hmcl.task.Schedulers;
+import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WebStage;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
+import org.jackhuang.hmcl.ui.construct.SpinnerPane;
 import org.jackhuang.hmcl.ui.construct.Validator;
 import org.jackhuang.hmcl.ui.wizard.WizardController;
 import org.jackhuang.hmcl.ui.wizard.WizardPage;
 import org.jackhuang.hmcl.util.StringUtils;
+import org.jackhuang.hmcl.util.io.CompressingUtils;
 
 import java.io.File;
 import java.util.Map;
@@ -71,6 +74,9 @@ public final class ModpackPage extends StackPane implements WizardPage {
     @FXML
     private JFXButton btnInstall;
 
+    @FXML
+    private SpinnerPane spinnerPane;
+
     public ModpackPage(WizardController controller) {
         this.controller = controller;
 
@@ -79,6 +85,12 @@ public final class ModpackPage extends StackPane implements WizardPage {
         Profile profile = (Profile) controller.getSettings().get("PROFILE");
 
         File selectedFile;
+
+        Optional<String> name = tryCast(controller.getSettings().get(MODPACK_NAME), String.class);
+        if (name.isPresent()) {
+            txtModpackName.setText(name.get());
+            txtModpackName.setDisable(true);
+        }
 
         Optional<File> filePath = tryCast(controller.getSettings().get(MODPACK_FILE), File.class);
         if (filePath.isPresent()) {
@@ -96,24 +108,30 @@ public final class ModpackPage extends StackPane implements WizardPage {
             controller.getSettings().put(MODPACK_FILE, selectedFile);
         }
 
-        try {
-            manifest = ModpackHelper.readModpackManifest(selectedFile);
-            controller.getSettings().put(MODPACK_MANIFEST, manifest);
-            lblName.setText(manifest.getName());
-            lblVersion.setText(manifest.getVersion());
-            lblAuthor.setText(manifest.getAuthor());
-            txtModpackName.setText(manifest.getName() + (StringUtils.isBlank(manifest.getVersion()) ? "" : "-" + manifest.getVersion()));
+        spinnerPane.showSpinner();
+        Task.supplyAsync(() -> CompressingUtils.findSuitableEncoding(selectedFile.toPath()))
+                .thenApplyAsync(encoding -> manifest = ModpackHelper.readModpackManifest(selectedFile.toPath(), encoding))
+                .whenComplete(Schedulers.javafx(), manifest -> {
+                    spinnerPane.hideSpinner();
+                    controller.getSettings().put(MODPACK_MANIFEST, manifest);
+                    lblName.setText(manifest.getName());
+                    lblVersion.setText(manifest.getVersion());
+                    lblAuthor.setText(manifest.getAuthor());
 
-            lblModpackLocation.setText(selectedFile.getAbsolutePath());
-            txtModpackName.getValidators().addAll(
-                    new Validator(i18n("install.new_game.already_exists"), str -> !profile.getRepository().hasVersion(str) && StringUtils.isNotBlank(str)),
-                    new Validator(i18n("version.forbidden_name"), str -> !profile.getRepository().forbidsVersion(str))
-            );
-            txtModpackName.textProperty().addListener(e -> btnInstall.setDisable(!txtModpackName.validate()));
-        } catch (UnsupportedModpackException e) {
-            Controllers.dialog(i18n("modpack.task.install.error"), i18n("message.error"), MessageBox.ERROR_MESSAGE);
-            Platform.runLater(controller::onEnd);
-        }
+                    lblModpackLocation.setText(selectedFile.getAbsolutePath());
+
+                    if (!name.isPresent()) {
+                        txtModpackName.setText(manifest.getName() + (StringUtils.isBlank(manifest.getVersion()) ? "" : "-" + manifest.getVersion()));
+                        txtModpackName.getValidators().addAll(
+                                new Validator(i18n("install.new_game.already_exists"), str -> !profile.getRepository().hasVersion(str) && StringUtils.isNotBlank(str)),
+                                new Validator(i18n("version.forbidden_name"), str -> !profile.getRepository().forbidsVersion(str))
+                        );
+                        txtModpackName.textProperty().addListener(e -> btnInstall.setDisable(!txtModpackName.validate()));
+                    }
+                }, e -> {
+                    Controllers.dialog(i18n("modpack.task.install.error"), i18n("message.error"), MessageType.ERROR);
+                    Platform.runLater(controller::onEnd);
+                }).start();
     }
 
     @Override

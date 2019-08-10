@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,29 +13,29 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.wizard;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import javafx.beans.property.StringProperty;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.task.TaskListener;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
 import org.jackhuang.hmcl.util.StringUtils;
 
 import java.util.Map;
 
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public interface TaskExecutorDialogWizardDisplayer extends AbstractWizardDisplayer {
 
     @Override
-    default void handleTask(Map<String, Object> settings, Task task) {
+    default void handleTask(Map<String, Object> settings, Task<?> task) {
         TaskExecutorDialogPane pane = new TaskExecutorDialogPane(it -> {
             it.fireEvent(new DialogCloseEvent());
             onEnd();
@@ -59,25 +59,26 @@ public interface TaskExecutorDialogWizardDisplayer extends AbstractWizardDisplay
                 pane.setSubtitle((String) subtitle);
         }
 
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             TaskExecutor executor = task.executor(new TaskListener() {
                 @Override
                 public void onStop(boolean success, TaskExecutor executor) {
-                    JFXUtilities.runInFX(() -> {
-                        pane.fireEvent(new DialogCloseEvent());
+                    runInFX(() -> {
                         if (success) {
                             if (settings.containsKey("success_message") && settings.get("success_message") instanceof String)
-                                Controllers.dialog((String) settings.get("success_message"), null, MessageBox.FINE_MESSAGE, () -> onEnd());
+                                Controllers.dialog((String) settings.get("success_message"), null, MessageType.FINE, () -> onEnd());
                             else if (!settings.containsKey("forbid_success_message"))
-                                Controllers.dialog(i18n("message.success"), null, MessageBox.FINE_MESSAGE, () -> onEnd());
+                                Controllers.dialog(i18n("message.success"), null, MessageType.FINE, () -> onEnd());
                         } else {
-                            if (executor.getLastException() == null)
+                            if (executor.getException() == null)
                                 return;
-                            String appendix = StringUtils.getStackTrace(executor.getLastException());
-                            if (settings.containsKey("failure_message") && settings.get("failure_message") instanceof String)
-                                Controllers.dialog(appendix, (String) settings.get("failure_message"), MessageBox.ERROR_MESSAGE, () -> onEnd());
+                            String appendix = StringUtils.getStackTrace(executor.getException());
+                            if (settings.get("failure_callback") instanceof WizardProvider.FailureCallback)
+                                ((WizardProvider.FailureCallback)settings.get("failure_callback")).onFail(settings, executor.getException(), () -> onEnd());
+                            else if (settings.get("failure_message") instanceof String)
+                                Controllers.dialog(appendix, (String) settings.get("failure_message"), MessageType.ERROR, () -> onEnd());
                             else if (!settings.containsKey("forbid_failure_message"))
-                                Controllers.dialog(appendix, i18n("wizard.failed"), MessageBox.ERROR_MESSAGE, () -> onEnd());
+                                Controllers.dialog(appendix, i18n("wizard.failed"), MessageType.ERROR, () -> onEnd());
                         }
 
                     });

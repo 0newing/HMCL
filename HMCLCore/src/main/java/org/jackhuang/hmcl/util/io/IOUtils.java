@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.io;
 
@@ -21,8 +21,9 @@ import java.io.*;
 import java.nio.charset.Charset;
 
 /**
+ * This utility class consists of some util methods operating on InputStream/OutputStream.
  *
- * @author huang
+ * @author huangyuhui
  */
 public final class IOUtils {
 
@@ -31,12 +32,26 @@ public final class IOUtils {
 
     public static final int DEFAULT_BUFFER_SIZE = 8 * 1024;
 
+    /**
+     * Read all bytes to a buffer from given input stream. The stream will not be closed.
+     *
+     * @param stream the InputStream being read.
+     * @return all bytes read from the stream
+     * @throws IOException if an I/O error occurs.
+     */
     public static byte[] readFullyWithoutClosing(InputStream stream) throws IOException {
         ByteArrayOutputStream result = new ByteArrayOutputStream();
         copyTo(stream, result);
         return result.toByteArray();
     }
 
+    /**
+     * Read all bytes to a buffer from given input stream, and close the input stream finally.
+     *
+     * @param stream the InputStream being read, closed finally.
+     * @return all bytes read from the stream
+     * @throws IOException if an I/O error occurs.
+     */
     public static ByteArrayOutputStream readFully(InputStream stream) throws IOException {
         try (InputStream is = stream) {
             ByteArrayOutputStream result = new ByteArrayOutputStream();

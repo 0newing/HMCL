@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.launch;
 
@@ -162,11 +162,11 @@ public class DefaultLauncher extends Launcher {
         if (options.isFullscreen())
             res.add("--fullscreen");
 
-        if (StringUtils.isNotBlank(options.getProxyHost()) && StringUtils.isNotBlank(options.getProxyPort())) {
+        if (StringUtils.isNotBlank(options.getProxyHost())) {
             res.add("--proxyHost");
             res.add(options.getProxyHost());
             res.add("--proxyPort");
-            res.add(options.getProxyPort());
+            res.add(String.valueOf(options.getProxyPort()));
             if (StringUtils.isNotBlank(options.getProxyUser()) && StringUtils.isNotBlank(options.getProxyPass())) {
                 res.add("--proxyUser");
                 res.add(options.getProxyUser());
@@ -217,11 +217,19 @@ public class DefaultLauncher extends Launcher {
 
     public void decompressNatives(File destination) throws NotDecompressingNativesException {
         try {
+            FileUtils.cleanDirectoryQuietly(destination);
             for (Library library : version.getLibraries())
                 if (library.isNative())
                     new Unzipper(repository.getLibraryFile(version, library), destination)
-                            .setFilter((destFile, isDirectory, zipEntry, path) -> library.getExtract().shouldExtract(path))
-                            .setReplaceExistentFile(true).unzip();
+                            .setFilter((zipEntry, isDirectory, destFile, path) -> {
+                                if (!isDirectory && Files.isRegularFile(destFile) && Files.size(destFile) == Files.size(zipEntry))
+                                    return false;
+                                String ext = FileUtils.getExtension(destFile);
+                                if (ext.equals("sha1") || ext.equals("git"))
+                                    return false;
+                                return library.getExtract().shouldExtract(path);
+                            })
+                            .setReplaceExistentFile(false).unzip();
         } catch (IOException e) {
             throw new NotDecompressingNativesException(e);
         }
@@ -247,7 +255,7 @@ public class DefaultLauncher extends Launcher {
 
     @Override
     public ManagedProcess launch() throws IOException, InterruptedException {
-        File nativeFolder = Files.createTempDirectory("minecraft").toFile();
+        File nativeFolder = repository.getNativeDirectory(versionId);
 
         // To guarantee that when failed to generate launch command line, we will not call pre-launch command
         List<String> rawCommandLine = generateCommandLine(nativeFolder).asList();

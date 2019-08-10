@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.account;
 
@@ -31,14 +31,16 @@ import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 
 import java.util.function.Consumer;
+import java.util.logging.Level;
+
+import static org.jackhuang.hmcl.util.Logging.LOG;
 
 public class AccountLoginPane extends StackPane {
     private final Account oldAccount;
     private final Consumer<AuthInfo> success;
     private final Runnable failed;
 
-    @FXML
-    private Label lblUsername;
+    @FXML private Label lblUsername;
     @FXML private JFXPasswordField txtPassword;
     @FXML private Label lblCreationWarning;
     @FXML private JFXProgressBar progressBar;
@@ -59,25 +61,20 @@ public class AccountLoginPane extends StackPane {
         String password = txtPassword.getText();
         progressBar.setVisible(true);
         lblCreationWarning.setText("");
-        Task.ofResult("login", () -> {
-            try {
-                return oldAccount.logInWithPassword(password);
-            } catch (Exception e) {
-                return e;
-            }
-        }).subscribe(Schedulers.javafx(), variable -> {
-            Object account = variable.get("login");
-            if (account instanceof AuthInfo) {
-                success.accept(((AuthInfo) account));
-                fireEvent(new DialogCloseEvent());
-            } else if (account instanceof NoSelectedCharacterException) {
-                fireEvent(new DialogCloseEvent());
-            } else if (account instanceof Exception) {
-                lblCreationWarning.setText(AddAccountPane.accountException((Exception) account));
-            }
-
-            progressBar.setVisible(false);
-        });
+        Task.supplyAsync(() -> oldAccount.logInWithPassword(password))
+                .whenComplete(Schedulers.javafx(), authInfo -> {
+                    success.accept(authInfo);
+                    fireEvent(new DialogCloseEvent());
+                    progressBar.setVisible(false);
+                }, e -> {
+                    LOG.log(Level.INFO, "Failed to login with password: " + oldAccount, e);
+                    if (e instanceof NoSelectedCharacterException) {
+                        fireEvent(new DialogCloseEvent());
+                    } else {
+                        lblCreationWarning.setText(AddAccountPane.accountException(e));
+                    }
+                    progressBar.setVisible(false);
+                }).start();
     }
 
     @FXML

@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,10 +13,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
+import javafx.scene.Node;
+import javafx.scene.control.Skin;
+import javafx.stage.FileChooser;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.download.MaintainTask;
 import org.jackhuang.hmcl.download.game.VersionJsonSaveTask;
@@ -26,53 +29,128 @@ import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.ui.Controllers;
-import org.jackhuang.hmcl.ui.InstallerItem;
-import org.jackhuang.hmcl.ui.ListPage;
+import org.jackhuang.hmcl.task.TaskExecutor;
+import org.jackhuang.hmcl.task.TaskListener;
+import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.download.InstallerWizardProvider;
+import org.jackhuang.hmcl.ui.download.UpdateInstallerWizardProvider;
+import org.jackhuang.hmcl.util.io.FileUtils;
 
+import java.io.File;
+import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.Optional;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.jackhuang.hmcl.download.LibraryAnalyzer.LibraryType.*;
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
-public class InstallerListPage extends ListPage<InstallerItem> {
+public class InstallerListPage extends ListPageBase<InstallerItem> {
     private Profile profile;
     private String versionId;
     private Version version;
+    private String gameVersion;
+
+    {
+        FXUtils.applyDragListener(this, it -> Arrays.asList("jar", "exe").contains(FileUtils.getExtension(it)), mods -> {
+            if (!mods.isEmpty())
+                doInstallOffline(mods.get(0));
+        });
+    }
+
+    @Override
+    protected Skin<?> createDefaultSkin() {
+        return new InstallerListPageSkin();
+    }
 
     public void loadVersion(Profile profile, String versionId) {
         this.profile = profile;
         this.versionId = versionId;
         this.version = profile.getRepository().getResolvedVersion(versionId);
+        this.gameVersion = null;
 
-        LibraryAnalyzer analyzer = LibraryAnalyzer.analyze(version);
+        Task.supplyAsync(() -> {
+            gameVersion = GameVersion.minecraftVersion(profile.getRepository().getVersionJar(version)).orElse(null);
 
-        Function<Library, Consumer<InstallerItem>> removeAction = library -> x -> {
-            LinkedList<Library> newList = new LinkedList<>(version.getLibraries());
-            newList.remove(library);
-            new MaintainTask(version.setLibraries(newList))
-                    .then(variables -> new VersionJsonSaveTask(profile.getRepository(), variables.get(MaintainTask.ID)))
-                    .with(profile.getRepository().refreshVersionsAsync())
-                    .with(Task.of(Schedulers.javafx(), () -> loadVersion(this.profile, this.versionId)))
-                    .start();
-        };
+            return LibraryAnalyzer.analyze(version);
+        }).thenAcceptAsync(Schedulers.javafx(), analyzer -> {
+            Function<Library, Consumer<InstallerItem>> removeAction = library -> x -> {
+                LinkedList<Library> newList = new LinkedList<>(version.getLibraries());
+                newList.remove(library);
+                new MaintainTask(version.setLibraries(newList))
+                        .thenComposeAsync(maintainedVersion -> new VersionJsonSaveTask(profile.getRepository(), maintainedVersion))
+                        .withComposeAsync(profile.getRepository().refreshVersionsAsync())
+                        .withRunAsync(Schedulers.javafx(), () -> loadVersion(this.profile, this.versionId))
+                        .start();
+            };
 
-        itemsProperty().clear();
-        analyzer.getForge().ifPresent(library -> itemsProperty().add(new InstallerItem("Forge", library.getVersion(), removeAction.apply(library))));
-        analyzer.getLiteLoader().ifPresent(library -> itemsProperty().add(new InstallerItem("LiteLoader", library.getVersion(), removeAction.apply(library))));
-        analyzer.getOptiFine().ifPresent(library -> itemsProperty().add(new InstallerItem("OptiFine", library.getVersion(), removeAction.apply(library))));
+            itemsProperty().clear();
+            analyzer.get(FORGE).ifPresent(library -> itemsProperty().add(
+                    new InstallerItem("Forge", library.getVersion(), () -> {
+                        Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, "forge", library));
+                    }, removeAction.apply(library))));
+            analyzer.get(LITELOADER).ifPresent(library -> itemsProperty().add(
+                    new InstallerItem("LiteLoader", library.getVersion(), () -> {
+                        Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, "liteloader", library));
+                    }, removeAction.apply(library))));
+            analyzer.get(OPTIFINE).ifPresent(library -> itemsProperty().add(
+                    new InstallerItem("OptiFine", library.getVersion(), () -> {
+                        Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, "optifine", library));
+                    }, removeAction.apply(library))));
+            analyzer.get(FABRIC).ifPresent(library -> itemsProperty().add(new InstallerItem("Fabric", library.getVersion(), null, null)));
+        }).start();
     }
 
-    @Override
-    public void add() {
-        Optional<String> gameVersion = GameVersion.minecraftVersion(profile.getRepository().getVersionJar(version));
-
-        if (!gameVersion.isPresent())
+    public void installOnline() {
+        if (gameVersion == null)
             Controllers.dialog(i18n("version.cannot_read"));
         else
-            Controllers.getDecorator().startWizard(new InstallerWizardProvider(profile, gameVersion.get(), version));
+            Controllers.getDecorator().startWizard(new InstallerWizardProvider(profile, gameVersion, version));
+    }
+
+    public void installOffline() {
+        FileChooser chooser = new FileChooser();
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(i18n("install.installer.install_offline.extension"), "*.jar", "*.exe"));
+        File file = chooser.showOpenDialog(Controllers.getStage());
+        if (file != null) doInstallOffline(file);
+    }
+
+    private void doInstallOffline(File file) {
+        Task<?> task = profile.getDependency().installLibraryAsync(version, file.toPath())
+                .thenComposeAsync(profile.getRepository().refreshVersionsAsync());
+        task.setName(i18n("install.installer.install_offline"));
+        TaskExecutor executor = task.executor(new TaskListener() {
+            @Override
+            public void onStop(boolean success, TaskExecutor executor) {
+                runInFX(() -> {
+                    if (success) {
+                        loadVersion(profile, versionId);
+                        Controllers.dialog(i18n("install.success"));
+                    } else {
+                        if (executor.getException() == null)
+                            return;
+                        InstallerWizardProvider.alertFailureMessage(executor.getException(), null);
+                    }
+                });
+            }
+        });
+        Controllers.taskDialog(executor, i18n("install.installer.install_offline"));
+        executor.start();
+    }
+
+    private class InstallerListPageSkin extends ToolbarListPageSkin<InstallerListPage> {
+
+        InstallerListPageSkin() {
+            super(InstallerListPage.this);
+        }
+
+        @Override
+        protected List<Node> initializeToolbar(InstallerListPage skinnable) {
+            return Arrays.asList(
+                    createToolbarButton(i18n("install.installer.install_online"), SVG::plus, skinnable::installOnline),
+                    createToolbarButton(i18n("install.installer.install_offline"), SVG::plus, skinnable::installOffline));
+        }
     }
 }

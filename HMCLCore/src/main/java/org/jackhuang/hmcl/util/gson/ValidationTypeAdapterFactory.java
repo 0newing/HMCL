@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.gson;
 
@@ -40,8 +40,14 @@ public final class ValidationTypeAdapterFactory implements TypeAdapterFactory {
         return new TypeAdapter<T>() {
             @Override
             public void write(JsonWriter writer, T t) throws IOException {
-                if (t instanceof Validation)
-                    ((Validation) t).validate();
+                if (t instanceof Validation) {
+                    try {
+                        ((Validation) t).validate();
+                    } catch (TolerableValidationException e) {
+                        delegate.write(writer, null);
+                        return;
+                    }
+                }
 
                 delegate.write(writer, t);
             }
@@ -49,8 +55,13 @@ public final class ValidationTypeAdapterFactory implements TypeAdapterFactory {
             @Override
             public T read(JsonReader reader) throws IOException {
                 T t = delegate.read(reader);
-                if (t instanceof Validation)
-                    ((Validation) t).validate();
+                if (t instanceof Validation) {
+                    try {
+                        ((Validation) t).validate();
+                    } catch (TolerableValidationException e) {
+                        return null;
+                    }
+                }
                 return t;
             }
         };

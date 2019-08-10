@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
@@ -24,13 +24,14 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.When;
-import javafx.beans.property.*;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.setting.*;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.Validator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
 import org.jackhuang.hmcl.upgrade.RemoteVersion;
@@ -41,7 +42,7 @@ import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.i18n.Locales;
 import org.jackhuang.hmcl.util.javafx.SafeStringConverter;
 
-import java.awt.Desktop;
+import java.awt.*;
 import java.io.IOException;
 import java.net.Proxy;
 import java.nio.file.Files;
@@ -49,7 +50,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -95,7 +95,11 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
 
         // ==== Proxy ====
         txtProxyHost.textProperty().bindBidirectional(config().proxyHostProperty());
-        txtProxyPort.textProperty().bindBidirectional(config().proxyPortProperty());
+        txtProxyPort.textProperty().bindBidirectional(config().proxyPortProperty(),
+                SafeStringConverter.fromInteger()
+                        .restrict(it -> it >= 0 && it <= 0xFFFF)
+                        .fallbackTo(0)
+                        .asPredicate(Validator.addTo(txtProxyPort)));
         txtProxyUsername.textProperty().bindBidirectional(config().proxyUserProperty());
         txtProxyPassword.textProperty().bindBidirectional(config().proxyPassProperty());
 
@@ -113,18 +117,18 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
         selectedItemPropertyFor(proxyConfigurationGroup, Proxy.Type.class).bindBidirectional(config().proxyTypeProperty());
         // ====
 
-        fileCommonLocation.loadChildren(Arrays.asList(
-                fileCommonLocation.createChildren(i18n("launcher.common_directory.default"), EnumCommonDirectory.DEFAULT)
+        fileCommonLocation.loadChildren(Collections.singletonList(
+                fileCommonLocation.createChildren(i18n("launcher.cache_directory.default"), EnumCommonDirectory.DEFAULT)
         ), EnumCommonDirectory.CUSTOM);
         fileCommonLocation.selectedDataProperty().bindBidirectional(config().commonDirTypeProperty());
         fileCommonLocation.customTextProperty().bindBidirectional(config().commonDirectoryProperty());
         fileCommonLocation.subtitleProperty().bind(
                 Bindings.createObjectBinding(() -> Optional.ofNullable(Settings.instance().getCommonDirectory())
-                                .orElse(i18n("launcher.common_directory.disabled")),
+                                .orElse(i18n("launcher.cache_directory.disabled")),
                         config().commonDirectoryProperty(), config().commonDirTypeProperty()));
 
         // ==== Update ====
-        FXUtils.installTooltip(btnUpdate, i18n("update.tooltip"));
+        FXUtils.installFastTooltip(btnUpdate, i18n("update.tooltip"));
         updateListener = any -> {
             btnUpdate.setVisible(UpdateChecker.isOutdated());
 
@@ -223,7 +227,7 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
             try {
                 Files.write(logFile, Logging.getRawLogs());
             } catch (IOException e) {
-                Platform.runLater(() -> Controllers.dialog(i18n("settings.launcher.launcher_log.export.failed") + "\n" + e, null, MessageBox.ERROR_MESSAGE));
+                Platform.runLater(() -> Controllers.dialog(i18n("settings.launcher.launcher_log.export.failed") + "\n" + e, null, MessageType.ERROR));
                 LOG.log(Level.WARNING, "Failed to export logs", e);
                 return;
             }
@@ -241,5 +245,10 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
     @Override
     protected void onHelp() {
         FXUtils.openLink(Metadata.HELP_URL);
+    }
+
+    @Override
+    protected void onSponsor() {
+        FXUtils.openLink("https://hmcl.huangyuhui.net/api/redirect/sponsor");
     }
 }

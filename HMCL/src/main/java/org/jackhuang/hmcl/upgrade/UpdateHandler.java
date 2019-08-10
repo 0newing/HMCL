@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,22 +13,23 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.upgrade;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import javafx.application.Platform;
-import javafx.scene.layout.Region;
+
 import org.jackhuang.hmcl.Main;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.Controllers;
-import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.UpgradeDialog;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.util.StringUtils;
+import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.JarUtils;
 import org.jackhuang.hmcl.util.platform.JavaVersion;
 
@@ -37,15 +38,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.jackhuang.hmcl.ui.FXUtils.checkFxUserThread;
 import static org.jackhuang.hmcl.util.Lang.thread;
 import static org.jackhuang.hmcl.util.Logging.LOG;
@@ -92,42 +89,42 @@ public final class UpdateHandler {
     public static void updateFrom(RemoteVersion version) {
         checkFxUserThread();
 
-        Path downloaded;
-        try {
-            downloaded = Files.createTempFile("hmcl-update-", ".jar");
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Failed to create temp file", e);
-            return;
-        }
+        Controllers.dialog(new UpgradeDialog(() -> {
+            Path downloaded;
+            try {
+                downloaded = Files.createTempFile("hmcl-update-", ".jar");
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Failed to create temp file", e);
+                return;
+            }
 
-        Task task = new HMCLDownloadTask(version, downloaded);
+            Task<?> task = new HMCLDownloadTask(version, downloaded);
 
-        TaskExecutor executor = task.executor();
-        Region dialog = Controllers.taskDialog(executor, i18n("message.downloading"), "", null);
-        thread(() -> {
-            boolean success = executor.test();
-            Platform.runLater(() -> dialog.fireEvent(new DialogCloseEvent()));
+            TaskExecutor executor = task.executor();
+            Controllers.taskDialog(executor, i18n("message.downloading"));
+            thread(() -> {
+                boolean success = executor.test();
 
-            if (success) {
-                try {
-                    if (!IntegrityChecker.isSelfVerified()) {
-                        throw new IOException("Current JAR is not verified");
+                if (success) {
+                    try {
+                        if (!IntegrityChecker.isSelfVerified()) {
+                            throw new IOException("Current JAR is not verified");
+                        }
+
+                        requestUpdate(downloaded, getCurrentLocation());
+                        System.exit(0);
+                    } catch (IOException e) {
+                        LOG.log(Level.WARNING, "Failed to update to " + version, e);
+                        Platform.runLater(() -> Controllers.dialog(StringUtils.getStackTrace(e), i18n("update.failed"), MessageType.ERROR));
                     }
 
-                    requestUpdate(downloaded, getCurrentLocation());
-                    System.exit(0);
-                } catch (IOException e) {
+                } else {
+                    Exception e = executor.getException();
                     LOG.log(Level.WARNING, "Failed to update to " + version, e);
-                    Platform.runLater(() -> Controllers.dialog(StringUtils.getStackTrace(e), i18n("update.failed"), MessageBox.ERROR_MESSAGE));
-                    return;
+                    Platform.runLater(() -> Controllers.dialog(e.toString(), i18n("update.failed"), MessageType.ERROR));
                 }
-
-            } else {
-                Throwable e = task.getLastException();
-                LOG.log(Level.WARNING, "Failed to update to " + version, e);
-                Platform.runLater(() -> Controllers.dialog(e.toString(), i18n("update.failed"), MessageBox.ERROR_MESSAGE));
-            }
-        });
+            });
+        }));
     }
 
     private static void applyUpdate(Path target) throws IOException {
@@ -161,9 +158,7 @@ public final class UpdateHandler {
         commandline.add(JavaVersion.fromCurrentEnvironment().getBinary().toString());
         commandline.add("-jar");
         commandline.add(jar.toAbsolutePath().toString());
-        for (String arg : appArgs) {
-            commandline.add(arg);
-        }
+        commandline.addAll(Arrays.asList(appArgs));
         LOG.info("Starting process: " + commandline);
         new ProcessBuilder(commandline)
                 .directory(Paths.get("").toAbsolutePath().toFile())
@@ -206,11 +201,7 @@ public final class UpdateHandler {
             StackTraceElement element = stacktrace[i];
             if (Main.class.getName().equals(element.getClassName())) {
                 // we've reached the main method
-                if (i + 1 == stacktrace.length) {
-                    return false;
-                } else {
-                    return true;
-                }
+                return i + 1 != stacktrace.length;
             }
         }
         return false;
@@ -242,7 +233,7 @@ public final class UpdateHandler {
         Path hmclVersionJson = Metadata.HMCL_DIRECTORY.resolve("hmclver.json");
         if (Files.isRegularFile(hmclVersionJson)) {
             try {
-                Map<?, ?> content = new Gson().fromJson(new String(Files.readAllBytes(hmclVersionJson), UTF_8), Map.class);
+                Map<?, ?> content = new Gson().fromJson(FileUtils.readText(hmclVersionJson), Map.class);
                 Object ver = content.get("ver");
                 if (ver instanceof String && ((String) ver).startsWith("3.")) {
                     Files.delete(hmclVersionJson);

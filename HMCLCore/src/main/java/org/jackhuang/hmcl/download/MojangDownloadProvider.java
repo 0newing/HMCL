@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,11 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
-import org.jackhuang.hmcl.download.forge.ForgeVersionList;
+import org.jackhuang.hmcl.download.forge.ForgeBMCLVersionList;
 import org.jackhuang.hmcl.download.game.GameVersionList;
 import org.jackhuang.hmcl.download.liteloader.LiteLoaderVersionList;
 import org.jackhuang.hmcl.download.optifine.OptiFineBMCLVersionList;
@@ -44,7 +44,7 @@ public class MojangDownloadProvider implements DownloadProvider {
             case "game":
                 return GameVersionList.INSTANCE;
             case "forge":
-                return ForgeVersionList.INSTANCE;
+                return ForgeBMCLVersionList.INSTANCE;
             case "liteloader":
                 return LiteLoaderVersionList.INSTANCE;
             case "optifine":
@@ -56,6 +56,7 @@ public class MojangDownloadProvider implements DownloadProvider {
 
     @Override
     public String injectURL(String baseURL) {
-        return baseURL;
+        return baseURL
+                .replaceFirst("https?://files\\.minecraftforge\\.net/maven", "https://bmclapi2.bangbang93.com/maven");
     }
 }

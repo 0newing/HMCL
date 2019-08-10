@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,13 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.io;
 
 import java.io.*;
 import java.net.*;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -67,8 +66,8 @@ public final class NetworkUtils {
 
     /**
      * @see <a href="https://github.com/curl/curl/blob/3f7b1bb89f92c13e69ee51b710ac54f775aab320/lib/transfer.c#L1427-L1461">Curl</a>
-     * @param location
-     * @return
+     * @param location the url to be URL encoded
+     * @return encoded URL
      */
     public static String encodeLocation(String location) {
         StringBuilder sb = new StringBuilder();
@@ -94,11 +93,11 @@ public final class NetworkUtils {
     }
 
     /**
-     * This method aims to solve problem when "Location" in stupid server's response is not encoded.
+     * This method is a work-around that aims to solve problem when "Location" in stupid server's response is not encoded.
      * @see <a href="https://github.com/curl/curl/issues/473">Issue with libcurl</a>
-     * @param conn
-     * @return
-     * @throws IOException
+     * @param conn the stupid http connection.
+     * @return manually redirected http connection.
+     * @throws IOException if an I/O error occurs.
      */
     public static HttpURLConnection resolveConnection(HttpURLConnection conn) throws IOException {
         int redirect = 0;

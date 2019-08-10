@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.gson;
 
@@ -21,15 +21,10 @@ import java.io.File;
 import java.util.Date;
 import java.util.UUID;
 
-import org.jackhuang.hmcl.game.Argument;
-import org.jackhuang.hmcl.game.Library;
-import org.jackhuang.hmcl.game.RuledArgument;
-import org.jackhuang.hmcl.game.StringArgument;
-import org.jackhuang.hmcl.util.platform.Platform;
-
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonSyntaxException;
 
 /**
  * @author yushijinhun
@@ -39,13 +34,8 @@ public final class JsonUtils {
     public static final Gson GSON = new GsonBuilder()
             .enableComplexMapKeySerialization()
             .setPrettyPrinting()
-            .registerTypeAdapter(Library.class, Library.Serializer.INSTANCE)
-            .registerTypeAdapter(Argument.class, Argument.Serializer.INSTANCE)
-            .registerTypeAdapter(StringArgument.class, Argument.Serializer.INSTANCE)
-            .registerTypeAdapter(RuledArgument.class, RuledArgument.Serializer.INSTANCE)
             .registerTypeAdapter(Date.class, DateTypeAdapter.INSTANCE)
             .registerTypeAdapter(UUID.class, UUIDTypeAdapter.INSTANCE)
-            .registerTypeAdapter(Platform.class, Platform.Serializer.INSTANCE)
             .registerTypeAdapter(File.class, FileTypeAdapter.INSTANCE)
             .registerTypeAdapterFactory(ValidationTypeAdapterFactory.INSTANCE)
             .registerTypeAdapterFactory(LowerCaseEnumTypeAdapterFactory.INSTANCE)
@@ -59,5 +49,13 @@ public final class JsonUtils {
         if (parsed == null)
             throw new JsonParseException("Json object cannot be null.");
         return parsed;
+    }
+
+    public static <T> T fromMaybeMalformedJson(String json, Class<T> classOfT) throws JsonParseException {
+        try {
+            return GSON.fromJson(json, classOfT);
+        } catch (JsonSyntaxException e) {
+            return null;
+        }
     }
 }

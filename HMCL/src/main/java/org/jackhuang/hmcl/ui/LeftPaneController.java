@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,38 +13,33 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import javafx.application.Platform;
-import javafx.scene.image.Image;
-import javafx.scene.layout.Region;
 import org.jackhuang.hmcl.event.EventBus;
 import org.jackhuang.hmcl.event.RefreshedVersionsEvent;
 import org.jackhuang.hmcl.game.HMCLGameRepository;
 import org.jackhuang.hmcl.game.ModpackHelper;
-import org.jackhuang.hmcl.mod.Modpack;
-import org.jackhuang.hmcl.mod.UnsupportedModpackException;
 import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.setting.Profiles;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.account.AccountAdvancedListItem;
 import org.jackhuang.hmcl.ui.account.AddAccountPane;
 import org.jackhuang.hmcl.ui.construct.AdvancedListBox;
 import org.jackhuang.hmcl.ui.construct.AdvancedListItem;
-import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.profile.ProfileAdvancedListItem;
 import org.jackhuang.hmcl.ui.versions.GameAdvancedListItem;
 import org.jackhuang.hmcl.ui.versions.Versions;
+import org.jackhuang.hmcl.util.io.CompressingUtils;
 
 import java.io.File;
-import java.util.concurrent.atomic.AtomicReference;
 
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class LeftPaneController extends AdvancedListBox {
@@ -72,12 +67,12 @@ public final class LeftPaneController extends AdvancedListBox {
         profileListItem.profileProperty().bind(Profiles.selectedProfileProperty());
 
         AdvancedListItem gameItem = new AdvancedListItem();
-        gameItem.setImage(new Image("/assets/img/bookshelf.png"));
+        gameItem.setImage(newImage("/assets/img/bookshelf.png"));
         gameItem.setTitle(i18n("version.manage"));
         gameItem.setOnAction(e -> Controllers.navigate(Controllers.getGameListPage()));
 
         AdvancedListItem launcherSettingsItem = new AdvancedListItem();
-        launcherSettingsItem.setImage(new Image("/assets/img/command.png"));
+        launcherSettingsItem.setImage(newImage("/assets/img/command.png"));
         launcherSettingsItem.setTitle(i18n("settings.launcher"));
         launcherSettingsItem.setOnAction(e -> Controllers.navigate(Controllers.getSettingsPage()));
 
@@ -111,37 +106,28 @@ public final class LeftPaneController extends AdvancedListBox {
     // ====
 
     private boolean checkedModpack = false;
-    private static boolean showNewAccount = true;
 
     private void onRefreshedVersions(HMCLGameRepository repository) {
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             if (!checkedModpack) {
                 checkedModpack = true;
 
                 if (repository.getVersionCount() == 0) {
                     File modpackFile = new File("modpack.zip").getAbsoluteFile();
                     if (modpackFile.exists()) {
-                        try {
-                            AtomicReference<Region> region = new AtomicReference<>();
-                            Modpack modpack = ModpackHelper.readModpackManifest(modpackFile);
-                            TaskExecutor executor = ModpackHelper.getInstallTask(repository.getProfile(), modpackFile, modpack.getName(), modpack)
-                                    .with(Task.of(Schedulers.javafx(), () -> {
-                                        region.get().fireEvent(new DialogCloseEvent());
-                                        checkAccount();
-                                    })).executor();
-                            region.set(Controllers.taskDialog(executor, i18n("modpack.installing"), ""));
-                            executor.start();
-                            showNewAccount = false;
-                        } catch (UnsupportedModpackException ignore) {
-                        }
+                        Task.supplyAsync(() -> CompressingUtils.findSuitableEncoding(modpackFile.toPath()))
+                                .thenApplyAsync(encoding -> ModpackHelper.readModpackManifest(modpackFile.toPath(), encoding))
+                                .thenApplyAsync(modpack -> ModpackHelper.getInstallTask(repository.getProfile(), modpackFile, modpack.getName(), modpack)
+                                            .withRunAsync(Schedulers.javafx(), this::checkAccount).executor())
+                                .thenAcceptAsync(Schedulers.javafx(), executor -> {
+                                    Controllers.taskDialog(executor, i18n("modpack.installing"));
+                                    executor.start();
+                                }).start();
                     }
                 }
             }
 
-            if (showNewAccount) {
-                showNewAccount = false;
-                checkAccount();
-            }
+            checkAccount();
         });
     }
 }

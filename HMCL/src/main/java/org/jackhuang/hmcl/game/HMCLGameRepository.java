@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,19 +13,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.game;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import javafx.scene.image.Image;
-import org.jackhuang.hmcl.event.EventBus;
-import org.jackhuang.hmcl.event.RefreshedVersionsEvent;
-import org.jackhuang.hmcl.event.RefreshingVersionsEvent;
 import org.jackhuang.hmcl.setting.EnumGameDirectory;
 import org.jackhuang.hmcl.setting.Profile;
-import org.jackhuang.hmcl.setting.Settings;
 import org.jackhuang.hmcl.setting.VersionSetting;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
@@ -34,6 +30,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
+
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 
 public class HMCLGameRepository extends DefaultGameRepository {
     private final Profile profile;
@@ -81,16 +79,19 @@ public class HMCLGameRepository extends DefaultGameRepository {
         }
     }
 
-    @Override
-    public void refreshVersions() {
-        EventBus.EVENT_BUS.fireEvent(new RefreshingVersionsEvent(this));
-        refreshVersionsImpl();
-        EventBus.EVENT_BUS.fireEvent(new RefreshedVersionsEvent(this));
-    }
-
     public void changeDirectory(File newDirectory) {
         setBaseDirectory(newDirectory);
         refreshVersionsAsync().start();
+    }
+
+    private void clean(File directory) throws IOException {
+        FileUtils.deleteDirectory(new File(directory, "crash-reports"));
+        FileUtils.deleteDirectory(new File(directory, "logs"));
+    }
+
+    public void clean(String id) throws IOException {
+        clean(getBaseDirectory());
+        clean(getRunDirectory(id));
     }
 
     private File getVersionSettingFile(String id) {
@@ -151,16 +152,19 @@ public class HMCLGameRepository extends DefaultGameRepository {
 
     public Image getVersionIconImage(String id) {
         if (id == null || !isLoaded())
-            return new Image("/assets/img/grass.png");
+            return newImage("/assets/img/grass.png");
 
         Version version = getVersion(id);
         File iconFile = getVersionIconFile(id);
         if (iconFile.exists())
             return new Image("file:" + iconFile.getAbsolutePath());
-        else if ("net.minecraft.launchwrapper.Launch".equals(version.getMainClass()))
-            return new Image("/assets/img/furnace.png");
+        else if (version.getMainClass() != null &&
+                ("net.minecraft.launchwrapper.Launch".equals(version.getMainClass())
+                        || version.getMainClass().startsWith("net.fabricmc")
+                        || "cpw.mods.modlauncher.Launcher".equals(version.getMainClass())))
+            return newImage("/assets/img/furnace.png");
         else
-            return new Image("/assets/img/grass.png");
+            return newImage("/assets/img/grass.png");
     }
 
     public boolean saveVersionSetting(String id) {
@@ -217,8 +221,8 @@ public class HMCLGameRepository extends DefaultGameRepository {
         beingModpackVersions.remove(id);
     }
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting()
-            .registerTypeAdapter(VersionSetting.class, VersionSetting.Serializer.INSTANCE)
+    private static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
             .create();
 
     private static final HashSet<String> FORBIDDEN = new HashSet<>(Arrays.asList("modpack", "minecraftinstance", "manifest"));

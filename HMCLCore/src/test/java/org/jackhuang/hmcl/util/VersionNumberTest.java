@@ -1,3 +1,20 @@
+/*
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package org.jackhuang.hmcl.util;
 
 import org.jackhuang.hmcl.util.versioning.VersionNumber;
@@ -49,6 +66,10 @@ public class VersionNumberTest {
         u = VersionNumber.asVersion("1.6.0_22");
         v = VersionNumber.asVersion("1.8.0_11");
         Assert.assertTrue(u.compareTo(v) < 0);
+
+        u = VersionNumber.asVersion("1.12.2-14.23.5.2760");
+        v = VersionNumber.asVersion("1.12.2-14.23.4.2739");
+        Assert.assertTrue(u.compareTo(v) > 0);
     }
 
     @Test

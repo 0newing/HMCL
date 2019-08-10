@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download.game;
 
@@ -38,14 +38,14 @@ import java.util.List;
  *
  * @author huangyuhui
  */
-public final class GameAssetDownloadTask extends Task {
+public final class GameAssetDownloadTask extends Task<Void> {
     
     private final AbstractDependencyManager dependencyManager;
     private final Version version;
     private final AssetIndexInfo assetIndexInfo;
     private final File assetIndexFile;
-    private final List<Task> dependents = new LinkedList<>();
-    private final List<Task> dependencies = new LinkedList<>();
+    private final List<Task<?>> dependents = new LinkedList<>();
+    private final List<Task<?>> dependencies = new LinkedList<>();
 
     /**
      * Constructor.
@@ -53,23 +53,23 @@ public final class GameAssetDownloadTask extends Task {
      * @param dependencyManager the dependency manager that can provides {@link org.jackhuang.hmcl.game.GameRepository}
      * @param version the <b>resolved</b> version
      */
-    public GameAssetDownloadTask(AbstractDependencyManager dependencyManager, Version version) {
+    public GameAssetDownloadTask(AbstractDependencyManager dependencyManager, Version version, boolean forceDownloadingIndex) {
         this.dependencyManager = dependencyManager;
         this.version = version;
         this.assetIndexInfo = version.getAssetIndex();
         this.assetIndexFile = dependencyManager.getGameRepository().getIndexFile(version.getId(), assetIndexInfo.getId());
 
-        if (!assetIndexFile.exists())
+        if (!assetIndexFile.exists() || forceDownloadingIndex)
             dependents.add(new GameAssetIndexDownloadTask(dependencyManager, version));
     }
 
     @Override
-    public Collection<Task> getDependents() {
+    public Collection<Task<?>> getDependents() {
         return dependents;
     }
 
     @Override
-    public Collection<Task> getDependencies() {
+    public Collection<Task<?>> getDependencies() {
         return dependencies;
     }
     
@@ -89,6 +89,7 @@ public final class GameAssetDownloadTask extends Task {
                     String url = dependencyManager.getDownloadProvider().getAssetBaseURL() + assetObject.getLocation();
                     FileDownloadTask task = new FileDownloadTask(NetworkUtils.toURL(url), file, new FileDownloadTask.IntegrityCheck("SHA-1", assetObject.getHash()));
                     task.setName(assetObject.getHash());
+                    task.setCaching(true);
                     dependencies.add(task
                             .setCacheRepository(dependencyManager.getCacheRepository())
                             .setCaching(true)
@@ -99,5 +100,7 @@ public final class GameAssetDownloadTask extends Task {
                 updateProgress(++progress, index.getObjects().size());
             }
     }
-    
+
+    public static final boolean DOWNLOAD_INDEX_FORCIBLY = true;
+    public static final boolean DOWNLOAD_INDEX_IF_NECESSARY = false;
 }

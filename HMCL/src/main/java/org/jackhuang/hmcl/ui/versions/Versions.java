@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,34 +13,30 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
-import javafx.scene.layout.Region;
 import javafx.stage.FileChooser;
+import org.jackhuang.hmcl.download.game.GameAssetDownloadTask;
 import org.jackhuang.hmcl.game.GameRepository;
 import org.jackhuang.hmcl.game.LauncherHelper;
-import org.jackhuang.hmcl.game.ModpackHelper;
-import org.jackhuang.hmcl.mod.MismatchedModpackTypeException;
-import org.jackhuang.hmcl.mod.UnsupportedModpackException;
+import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.setting.EnumGameDirectory;
 import org.jackhuang.hmcl.setting.Profile;
-import org.jackhuang.hmcl.task.Schedulers;
-import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
-import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.download.ModpackInstallWizardProvider;
 import org.jackhuang.hmcl.ui.export.ExportWizardProvider;
+import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -53,9 +49,7 @@ public class Versions {
                 isMovingToTrashSupported ? i18n("version.manage.remove.confirm.trash", version, version + "_removed") :
                         i18n("version.manage.remove.confirm", version);
         Controllers.confirmDialog(message, i18n("message.confirm"), () -> {
-            if (profile.getRepository().removeVersionFromDisk(version)) {
-                profile.getRepository().refreshVersionsAsync().start();
-            }
+            profile.getRepository().removeVersionFromDisk(version);
         }, null);
     }
 
@@ -79,24 +73,22 @@ public class Versions {
     }
 
     public static void updateVersion(Profile profile, String version) {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle(i18n("modpack.choose"));
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(i18n("modpack"), "*.zip"));
-        File selectedFile = chooser.showOpenDialog(Controllers.getStage());
-        if (selectedFile != null) {
-            AtomicReference<Region> region = new AtomicReference<>();
-            try {
-                TaskExecutor executor = ModpackHelper.getUpdateTask(profile, selectedFile, version, ModpackHelper.readModpackConfiguration(profile.getRepository().getModpackConfiguration(version)))
-                        .then(Task.of(Schedulers.javafx(), () -> region.get().fireEvent(new DialogCloseEvent()))).executor();
-                region.set(Controllers.taskDialog(executor, i18n("modpack.update"), ""));
-                executor.start();
-            } catch (UnsupportedModpackException e) {
-                Controllers.dialog(i18n("modpack.unsupported"), i18n("message.error"), MessageBox.ERROR_MESSAGE);
-            } catch (MismatchedModpackTypeException e) {
-                Controllers.dialog(i18n("modpack.mismatched_type"), i18n("message.error"), MessageBox.ERROR_MESSAGE);
-            } catch (IOException e) {
-                Controllers.dialog(i18n("modpack.invalid"), i18n("message.error"), MessageBox.ERROR_MESSAGE);
-            }
+        Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(profile, version));
+    }
+
+    public static void updateGameAssets(Profile profile, String version) {
+        Version resolvedVersion = profile.getRepository().getResolvedVersion(version);
+        TaskExecutor executor = new GameAssetDownloadTask(profile.getDependency(), resolvedVersion, GameAssetDownloadTask.DOWNLOAD_INDEX_FORCIBLY)
+                .executor();
+        Controllers.taskDialog(executor, i18n("version.manage.redownload_assets_index"));
+        executor.start();
+    }
+
+    public static void cleanVersion(Profile profile, String id) {
+        try {
+            profile.getRepository().clean(id);
+        } catch (IOException e) {
+            Logging.LOG.log(Level.WARNING, "Unable to clean game directory", e);
         }
     }
 

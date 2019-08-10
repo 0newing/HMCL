@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import com.jfoenix.controls.*?>
-<?import javafx.collections.FXCollections?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.image.Image?>
@@ -60,16 +59,7 @@
                         <Label text="%settings.advanced.launcher_visible" BorderPane.alignment="CENTER_LEFT"/>
                     </left>
                     <right>
-                        <JFXComboBox fx:id="cboLauncherVisibility" BorderPane.alignment="CENTER_RIGHT" FXUtils.limitWidth="300">
-                            <items>
-                                <FXCollections fx:factory="observableArrayList">
-                                    <Label text="%settings.advanced.launcher_visibility.close"/>
-                                    <Label text="%settings.advanced.launcher_visibility.hide"/>
-                                    <Label text="%settings.advanced.launcher_visibility.keep"/>
-                                    <Label text="%settings.advanced.launcher_visibility.hide_reopen"/>
-                                </FXCollections>
-                            </items>
-                        </JFXComboBox>
+                        <JFXComboBox fx:id="cboLauncherVisibility" BorderPane.alignment="CENTER_RIGHT" FXUtils.limitWidth="300" />
                     </right>
                 </BorderPane>
 
@@ -156,6 +146,14 @@
                     </left>
                     <right>
                         <JFXToggleButton fx:id="chkNoGameCheck" size="8" FXUtils.limitHeight="20" />
+                    </right>
+                </BorderPane>
+                <BorderPane>
+                    <left>
+                        <Label BorderPane.alignment="CENTER_LEFT" text="%settings.advanced.dont_check_jvm_validity"/>
+                    </left>
+                    <right>
+                        <JFXToggleButton fx:id="chkNoJVMCheck" size="8" FXUtils.limitHeight="20" />
                     </right>
                 </BorderPane>
             </ComponentList>

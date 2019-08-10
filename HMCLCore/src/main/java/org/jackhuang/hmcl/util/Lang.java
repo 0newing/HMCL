@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,15 +13,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util;
 
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import org.jackhuang.hmcl.util.function.ExceptionalRunnable;
 import org.jackhuang.hmcl.util.function.ExceptionalSupplier;
+
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  *
@@ -72,13 +76,6 @@ public final class Lang {
         }
     }
 
-    public static void ignoringException(ExceptionalRunnable<?> runnable) {
-        try {
-            runnable.run();
-        } catch (Exception ignore) {
-        }
-    }
-
     /**
      * Cast {@code obj} to V dynamically.
      * @param obj the object reference to be cast.
@@ -94,18 +91,8 @@ public final class Lang {
         }
     }
 
-    /**
-     * Get the element at the specific position {@code index} in {@code list}.
-     *
-     * @param index the index of element to be return
-     * @param <V> the type of elements in {@code list}
-     * @return the element at the specific position, null if index is out of bound.
-     */
-    public static <V> Optional<V> get(List<V> list, int index) {
-        if (index < 0 || index >= list.size())
-            return Optional.empty();
-        else
-            return Optional.ofNullable(list.get(index));
+    public static <T> T getOrDefault(List<T> a, int index, T defaultValue) {
+        return index < 0 || index >= a.size() ? defaultValue : a.get(index);
     }
 
     /**
@@ -172,6 +159,17 @@ public final class Lang {
         return thread;
     }
 
+    public static ThreadPoolExecutor threadPool(String name, boolean daemon, int threads, long timeout, TimeUnit timeunit) {
+        AtomicInteger counter = new AtomicInteger(1);
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(0, threads, timeout, timeunit, new LinkedBlockingQueue<>(), r -> {
+            Thread t = new Thread(r, name + "-" + counter.getAndIncrement());
+            t.setDaemon(daemon);
+            return t;
+        });
+        pool.allowsCoreThreadTimeOut();
+        return pool;
+    }
+
     public static int parseInt(Object string, int defaultValue) {
         try {
             return Integer.parseInt(string.toString());
@@ -184,14 +182,6 @@ public final class Lang {
         try {
             if (string == null) return null;
             return Integer.parseInt(string.toString());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    public static Double toDoubleOrNull(Object string) {
-        try {
-            return Double.parseDouble(string.toString());
         } catch (NumberFormatException e) {
             return null;
         }
@@ -212,5 +202,19 @@ public final class Lang {
     public static <T> T apply(T t, Consumer<T> consumer) {
         consumer.accept(t);
         return t;
+    }
+
+    /**
+     * This is a useful function to prevent exceptions being eaten when using CompletableFuture.
+     * You can write:
+     * ... .exceptionally(handleUncaught);
+     */
+    public static final Function<Throwable, Void> handleUncaught = e -> {
+        handleUncaughtException(e);
+        return null;
+    };
+
+    public static void handleUncaughtException(Throwable e) {
+        Thread.currentThread().getUncaughtExceptionHandler().uncaughtException(Thread.currentThread(), e);
     }
 }

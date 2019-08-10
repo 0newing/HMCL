@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
@@ -46,6 +46,14 @@ public abstract class VersionList<T extends RemoteVersion> {
         return !versions.isEmpty();
     }
 
+    /**
+     * True if the version list that contains the remote versions which depends on the specific game version has been loaded.
+     * @param gameVersion the remote version depends on
+     */
+    public boolean isLoaded(String gameVersion) {
+        return !versions.get(gameVersion).isEmpty();
+    }
+
     public abstract boolean hasType();
 
     protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -54,10 +62,19 @@ public abstract class VersionList<T extends RemoteVersion> {
      * @param downloadProvider DownloadProvider
      * @return the task to reload the remote version list.
      */
-    public abstract Task refreshAsync(DownloadProvider downloadProvider);
+    public abstract Task<?> refreshAsync(DownloadProvider downloadProvider);
 
-    public Task loadAsync(DownloadProvider downloadProvider) {
-        return Task.ofThen(variables -> {
+    /**
+     * @param gameVersion the remote version depends on
+     * @param downloadProvider DownloadProvider
+     * @return the task to reload the remote version list.
+     */
+    public Task<?> refreshAsync(String gameVersion, DownloadProvider downloadProvider) {
+        return refreshAsync(downloadProvider);
+    }
+
+    public Task<?> loadAsync(DownloadProvider downloadProvider) {
+        return Task.composeAsync(() -> {
             lock.readLock().lock();
             boolean loaded;
 
@@ -67,6 +84,20 @@ public abstract class VersionList<T extends RemoteVersion> {
                 lock.readLock().unlock();
             }
             return loaded ? null : refreshAsync(downloadProvider);
+        });
+    }
+
+    public Task<?> loadAsync(String gameVersion, DownloadProvider downloadProvider) {
+        return Task.composeAsync(() -> {
+            lock.readLock().lock();
+            boolean loaded;
+
+            try {
+                loaded = isLoaded(gameVersion);
+            } finally {
+                lock.readLock().unlock();
+            }
+            return loaded ? null : refreshAsync(gameVersion, downloadProvider);
         });
     }
 

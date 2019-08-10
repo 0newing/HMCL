@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,12 +13,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.io;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 
@@ -28,7 +30,7 @@ public class Unzipper {
     private boolean terminateIfSubDirectoryNotExists = false;
     private String subDirectory = "/";
     private FileFilter filter = null;
-    private String encoding;
+    private Charset encoding = StandardCharsets.UTF_8;
 
     /**
      * Decompress the given zip file to a directory.
@@ -82,7 +84,7 @@ public class Unzipper {
         return this;
     }
 
-    public Unzipper setEncoding(String encoding) {
+    public Unzipper setEncoding(Charset encoding) {
         this.encoding = encoding;
         return this;
     }
@@ -99,7 +101,7 @@ public class Unzipper {
      */
     public void unzip() throws IOException {
         Files.createDirectories(dest);
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(zipFile, encoding)) {
+        try (FileSystem fs = CompressingUtils.readonly(zipFile).setEncoding(encoding).setAutoDetectEncoding(true).build()) {
             Path root = fs.getPath(subDirectory);
             if (!root.isAbsolute() || (subDirectory.length() > 1 && subDirectory.endsWith("/")))
                 throw new IllegalArgumentException("Subdirectory for unzipper must be absolute");
@@ -115,8 +117,12 @@ public class Unzipper {
                     Path destFile = dest.resolve(relativePath);
                     if (filter != null && !filter.accept(file, false, destFile, relativePath))
                         return FileVisitResult.CONTINUE;
-                    if (replaceExistentFile || Files.notExists(destFile))
-                        Files.copy(file, destFile, StandardCopyOption.REPLACE_EXISTING);
+                    try {
+                        Files.copy(file, destFile, replaceExistentFile ? new CopyOption[]{StandardCopyOption.REPLACE_EXISTING} : new CopyOption[]{});
+                    } catch (FileAlreadyExistsException e) {
+                        if (replaceExistentFile)
+                            throw e;
+                    }
                     return FileVisitResult.CONTINUE;
                 }
 
@@ -126,10 +132,8 @@ public class Unzipper {
                     String relativePath = root.relativize(dir).toString();
                     Path dirToCreate = dest.resolve(relativePath);
                     if (filter != null && !filter.accept(dir, true, dirToCreate, relativePath))
-                        return FileVisitResult.CONTINUE;
-                    if (Files.notExists(dirToCreate)) {
-                        Files.createDirectory(dirToCreate);
-                    }
+                        return FileVisitResult.SKIP_SUBTREE;
+                    Files.createDirectories(dirToCreate);
                     return FileVisitResult.CONTINUE;
                 }
             });
@@ -137,6 +141,6 @@ public class Unzipper {
     }
 
     public interface FileFilter {
-        boolean accept(Path destPath, boolean isDirectory, Path zipEntry, String entryPath) throws IOException;
+        boolean accept(Path zipEntry, boolean isDirectory, Path destFile, String entryPath) throws IOException;
     }
 }

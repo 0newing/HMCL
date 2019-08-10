@@ -110,6 +110,24 @@ def createExecutable(String suffix, String header) {
     createChecksum(output)
 }
 
+processResources {
+    ext.convertToBSS = { String resource ->
+        // exclude resource
+        doFirst {
+            def cssFile = new File(this.projectDir, "src/main/resources/" + resource)
+            def bssFile = new File(this.projectDir, "build/compiled-resources/" + resource[0..-4] + "bss")
+            bssFile.parentFile.mkdirs()
+            exec {
+                commandLine 'javapackager', '-createbss', '-outdir', bssFile.parent, '-srcfiles', cssFile.path
+            }
+        }
+    }
+    from "build/compiled-resources"
+
+    convertToBSS "assets/css/root.css"
+    convertToBSS "assets/css/blue.css"
+}
+
 task makePack(dependsOn: jar) {
     ext.outputPath = new File(jar.archivePath.parentFile, jar.archivePath.name[0..-4] + "pack")
     doLast {
@@ -122,7 +140,7 @@ task makePack(dependsOn: jar) {
 
 task makePackXz(dependsOn: makePack) doLast {
     def packXz = new File(makePack.outputPath.parentFile, makePack.outputPath.name + ".xz")
-    new XZOutputStream(packXz.newOutputStream(), new LZMA2Options(6)).withCloseable { it << makePack.outputPath.bytes }
+    new XZOutputStream(packXz.newOutputStream(), new LZMA2Options(5)).withCloseable { it << makePack.outputPath.bytes }
     createChecksum(packXz)
 }
 

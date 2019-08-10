@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,11 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.game;
 
 import com.google.gson.*;
+import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.reflect.TypeToken;
 import org.jackhuang.hmcl.util.Constants;
 import org.jackhuang.hmcl.util.ToStringBuilder;
@@ -35,6 +36,7 @@ import java.util.Optional;
  *
  * @author huangyuhui
  */
+@JsonAdapter(Library.Serializer.class)
 public class Library implements Comparable<Library> {
 
     private final String groupId;
@@ -43,13 +45,13 @@ public class Library implements Comparable<Library> {
     private final String classifier;
     private final String url;
     private final LibrariesDownloadInfo downloads;
-    private final LibraryDownloadInfo download;
+    private transient final LibraryDownloadInfo download;
     private final ExtractRules extract;
     private final Map<OperatingSystem, String> natives;
     private final List<CompatibilityRule> rules;
     private final List<String> checksums;
 
-    private final String path;
+    private transient final String path;
 
     public Library(String groupId, String artifactId, String version) {
         this(groupId, artifactId, version, null, null, null);
@@ -189,12 +191,6 @@ public class Library implements Comparable<Library> {
     }
 
     public static class Serializer implements JsonDeserializer<Library>, JsonSerializer<Library> {
-
-        public static final Serializer INSTANCE = new Serializer();
-
-        private Serializer() {
-        }
-
         @Override
         public Library deserialize(JsonElement json, Type type, JsonDeserializationContext context) throws JsonParseException {
             if (json == null || json == JsonNull.INSTANCE)

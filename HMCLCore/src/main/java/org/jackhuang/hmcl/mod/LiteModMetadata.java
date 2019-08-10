@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -108,7 +108,7 @@ public final class LiteModMetadata {
         return updateURI;
     }
     
-    public static ModInfo fromFile(File modFile) throws IOException, JsonParseException {
+    public static ModInfo fromFile(ModManager modManager, File modFile) throws IOException, JsonParseException {
         try (ZipFile zipFile = new ZipFile(modFile)) {
             ZipEntry entry = zipFile.getEntry("litemod.json");
             if (entry == null)
@@ -116,7 +116,8 @@ public final class LiteModMetadata {
             LiteModMetadata metadata = JsonUtils.GSON.fromJson(IOUtils.readFullyAsString(zipFile.getInputStream(entry)), LiteModMetadata.class);
             if (metadata == null)
                 throw new IOException("Mod " + modFile + " `litemod.json` is malformed.");
-            return new ModInfo(modFile, metadata.getName(), metadata.getDescription(), metadata.getAuthor(), metadata.getVersion(), metadata.getGameVersion(), metadata.getUpdateURI());
+            return new ModInfo(modManager, modFile, metadata.getName(), metadata.getDescription(), metadata.getAuthor(),
+                    metadata.getVersion(), metadata.getGameVersion(), metadata.getUpdateURI());
         }
     }
     

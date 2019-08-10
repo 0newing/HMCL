@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,10 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.setting;
 
+import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import javafx.beans.binding.Bindings;
@@ -24,8 +25,10 @@ import javafx.beans.binding.ObjectBinding;
 import javafx.scene.paint.Color;
 
 import org.jackhuang.hmcl.util.Logging;
+import org.jackhuang.hmcl.util.ResourceNotFoundError;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
+import org.jackhuang.hmcl.util.javafx.BindingMapping;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +37,7 @@ import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 
+@JsonAdapter(Theme.TypeAdapter.class)
 public class Theme {
     public static final Theme BLUE = new Theme("blue", "#5C6BC0");
 
@@ -78,18 +82,18 @@ public class Theme {
         String css;
         try {
             File temp = File.createTempFile("hmcl", ".css");
-            FileUtils.writeText(temp, IOUtils.readFullyAsString(Theme.class.getResourceAsStream("/assets/css/custom.css"))
+            FileUtils.writeText(temp, IOUtils.readFullyAsString(ResourceNotFoundError.getResourceAsStream("/assets/css/custom.css"))
                     .replace("%base-color%", color)
                     .replace("%font-color%", getColorDisplayName(getForegroundColor())));
             css = temp.toURI().toString();
-        } catch (IOException e) {
+        } catch (IOException | NullPointerException e) {
             Logging.LOG.log(Level.SEVERE, "Unable to create theme stylesheet. Fallback to blue theme.", e);
-            css = Theme.class.getResource("/assets/css/blue.css").toExternalForm();
+            css = "/assets/css/blue.css";
         }
 
         return new String[]{
                 css,
-                Theme.class.getResource("/assets/css/root.css").toExternalForm()
+                "/assets/css/root.css"
         };
     }
 
@@ -130,7 +134,8 @@ public class Theme {
     }
 
     public static ObjectBinding<Color> foregroundFillBinding() {
-        return Bindings.createObjectBinding(() -> config().getTheme().getForegroundColor(), config().themeProperty());
+        return BindingMapping.of(config().themeProperty())
+                .map(Theme::getForegroundColor);
     }
 
     public static ObjectBinding<Color> blackFillBinding() {

@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,66 +13,75 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
 import org.jackhuang.hmcl.game.Library;
 import org.jackhuang.hmcl.game.Version;
 
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 public final class LibraryAnalyzer {
-    private final Library forge;
-    private final Library liteLoader;
-    private final Library optiFine;
+    private final Map<LibraryType, Library> libraries;
 
-    public LibraryAnalyzer(Library forge, Library liteLoader, Library optiFine) {
-        this.forge = forge;
-        this.liteLoader = liteLoader;
-        this.optiFine = optiFine;
+    private LibraryAnalyzer(Map<LibraryType, Library> libraries) {
+        this.libraries = libraries;
     }
 
-    public Optional<Library> getForge() {
-        return Optional.ofNullable(forge);
+    public Optional<Library> get(LibraryType type) {
+        return Optional.ofNullable(libraries.get(type));
     }
 
-    public boolean hasForge() {
-        return forge != null;
+    public boolean has(LibraryType type) {
+        return libraries.containsKey(type);
     }
 
-    public Optional<Library> getLiteLoader() {
-        return Optional.ofNullable(liteLoader);
-    }
-
-    public boolean hasLiteLoader() {
-        return liteLoader != null;
-    }
-
-    public Optional<Library> getOptiFine() {
-        return Optional.ofNullable(optiFine);
-    }
-
-    public boolean hasOptiFine() {
-        return optiFine != null;
+    public boolean hasModLoader() {
+        return Arrays.stream(LibraryType.values())
+                .filter(LibraryType::isModLoader)
+                .anyMatch(this::has);
     }
 
     public static LibraryAnalyzer analyze(Version version) {
-        Library forge = null, liteLoader = null, optiFine = null;
+        Map<LibraryType, Library> libraries = new EnumMap<>(LibraryType.class);
 
         for (Library library : version.getLibraries()) {
             String groupId = library.getGroupId();
             String artifactId = library.getArtifactId();
-            if (groupId.equalsIgnoreCase("net.minecraftforge") && artifactId.equalsIgnoreCase("forge"))
-                forge = library;
 
-            if (groupId.equalsIgnoreCase("com.mumfrey") && artifactId.equalsIgnoreCase("liteloader"))
-                liteLoader = library;
-
-            if ((groupId.equalsIgnoreCase("optifine") || groupId.equalsIgnoreCase("net.optifine")) && artifactId.equalsIgnoreCase("optifine"))
-                optiFine = library;
+            for (LibraryType type : LibraryType.values()) {
+                if (type.group.matcher(groupId).matches() && type.artifact.matcher(artifactId).matches()) {
+                    libraries.put(type, library);
+                    break;
+                }
+            }
         }
 
-        return new LibraryAnalyzer(forge, liteLoader, optiFine);
+        return new LibraryAnalyzer(libraries);
+    }
+
+    public enum LibraryType {
+        FORGE(true, Pattern.compile("net\\.minecraftforge"), Pattern.compile("forge")),
+        LITELOADER(true, Pattern.compile("com\\.mumfrey"), Pattern.compile("liteloader")),
+        OPTIFINE(false, Pattern.compile("(net\\.)?optifine"), Pattern.compile(".*")),
+        FABRIC(true, Pattern.compile("net\\.fabricmc"), Pattern.compile("fabric-loader"));
+
+        private final Pattern group, artifact;
+        private final boolean modLoader;
+
+        LibraryType(boolean modLoader, Pattern group, Pattern artifact) {
+            this.modLoader = modLoader;
+            this.group = group;
+            this.artifact = artifact;
+        }
+
+        public boolean isModLoader() {
+            return modLoader;
+        }
     }
 }

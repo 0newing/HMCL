@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.export;
 
@@ -31,6 +31,7 @@ import org.jackhuang.hmcl.ui.wizard.WizardProvider;
 import org.jackhuang.hmcl.util.io.Zipper;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Collections;
@@ -59,8 +60,8 @@ public final class ExportWizardProvider implements WizardProvider {
         List<File> launcherJar = Launcher.getCurrentJarFiles();
         boolean includeLauncher = (Boolean) settings.get(ModpackInfoPage.MODPACK_INCLUDE_LAUNCHER) && launcherJar != null;
 
-        return new Task() {
-            Task dependency = null;
+        return new Task<Void>() {
+            Task<?> dependency = null;
 
             @Override
             public void execute() throws Exception {
@@ -74,18 +75,22 @@ public final class ExportWizardProvider implements WizardProvider {
                                 (String) settings.get(ModpackInfoPage.MODPACK_VERSION),
                                 null,
                                 (String) settings.get(ModpackInfoPage.MODPACK_DESCRIPTION),
+                                StandardCharsets.UTF_8,
                                 null
                         ), tempModpack);
 
                 if (includeLauncher) {
-                    dependency = dependency.then(Task.of(() -> {
+                    dependency = dependency.thenRunAsync(() -> {
                         try (Zipper zip = new Zipper(modpackFile.toPath())) {
                             Config exported = new Config();
+
                             exported.setBackgroundImageType(config().getBackgroundImageType());
                             exported.setBackgroundImage(config().getBackgroundImage());
                             exported.setTheme(config().getTheme());
                             exported.setDownloadType(config().getDownloadType());
+                            exported.setPreferredLoginType(config().getPreferredLoginType());
                             exported.getAuthlibInjectorServers().setAll(config().getAuthlibInjectorServers());
+
                             zip.putTextFile(exported.toJson(), ConfigHolder.CONFIG_FILENAME);
                             zip.putFile(tempModpack, "modpack.zip");
 
@@ -104,12 +109,12 @@ public final class ExportWizardProvider implements WizardProvider {
                             for (File jar : launcherJar)
                                 zip.putFile(jar, jar.getName());
                         }
-                    }));
+                    });
                 }
             }
 
             @Override
-            public Collection<? extends Task> getDependencies() {
+            public Collection<Task<?>> getDependencies() {
                 return Collections.singleton(dependency);
             }
         };

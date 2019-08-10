@@ -1,8 +1,26 @@
+/*
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package org.jackhuang.hmcl.download.game;
 
 import org.jackhuang.hmcl.download.AbstractDependencyManager;
 import org.jackhuang.hmcl.download.DefaultCacheRepository;
 import org.jackhuang.hmcl.game.Library;
+import org.jackhuang.hmcl.task.DownloadException;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
 import org.jackhuang.hmcl.task.Task;
@@ -27,7 +45,7 @@ import java.util.logging.Level;
 import static org.jackhuang.hmcl.util.DigestUtils.digest;
 import static org.jackhuang.hmcl.util.Hex.encodeHex;
 
-public class LibraryDownloadTask extends Task {
+public class LibraryDownloadTask extends Task<Void> {
     private FileDownloadTask task;
     protected final File jar;
     protected final DefaultCacheRepository cacheRepository;
@@ -56,7 +74,7 @@ public class LibraryDownloadTask extends Task {
     }
 
     @Override
-    public Collection<? extends Task> getDependents() {
+    public Collection<Task<?>> getDependents() {
         if (cached) return Collections.emptyList();
         else return Collections.singleton(task);
     }
@@ -71,10 +89,10 @@ public class LibraryDownloadTask extends Task {
         if (cached) return;
 
         if (!isDependentsSucceeded()) {
-            // Since FileDownloadTask wraps the actual exception with another IOException.
+            // Since FileDownloadTask wraps the actual exception with DownloadException.
             // We should extract it letting the error message clearer.
-            Throwable t = task.getLastException();
-            if (t.getCause() != null)
+            Exception t = task.getException();
+            if (t instanceof DownloadException)
                 throw new LibraryDownloadException(library, t.getCause());
             else
                 throw new LibraryDownloadException(library, t);
@@ -85,6 +103,11 @@ public class LibraryDownloadTask extends Task {
                 throw new IOException("Checksum failed for " + library);
             }
         }
+    }
+
+    @Override
+    public boolean doPreExecute() {
+        return true;
     }
 
     @Override
@@ -105,17 +128,22 @@ public class LibraryDownloadTask extends Task {
         try {
             URL packXz = NetworkUtils.toURL(url + ".pack.xz");
             if (NetworkUtils.urlExists(packXz)) {
-                task = new FileDownloadTask(packXz, xzFile, null);
+                task = new FileDownloadTask(packXz, xzFile, null).setCaching(true);
                 xz = true;
             } else {
                 task = new FileDownloadTask(NetworkUtils.toURL(url),
                         jar,
-                        library.getDownload().getSha1() != null ? new IntegrityCheck("SHA-1", library.getDownload().getSha1()) : null);
+                        library.getDownload().getSha1() != null ? new IntegrityCheck("SHA-1", library.getDownload().getSha1()) : null).setCaching(true);
                 xz = false;
             }
         } catch (IOException e) {
             throw new LibraryDownloadException(library, e);
         }
+    }
+
+    @Override
+    public boolean doPostExecute() {
+        return true;
     }
 
     @Override
@@ -197,16 +225,16 @@ public class LibraryDownloadTask extends Task {
         int x = decompressed.length;
         int len = decompressed[(x - 8)] & 0xFF | (decompressed[(x - 7)] & 0xFF) << 8 | (decompressed[(x - 6)] & 0xFF) << 16 | (decompressed[(x - 5)] & 0xFF) << 24;
 
-        File temp = FileUtils.createTempFile("minecraft", ".pack");
+        Path temp = Files.createTempFile("minecraft", ".pack");
 
         byte[] checksums = Arrays.copyOfRange(decompressed, decompressed.length - len - 8, decompressed.length - 8);
 
-        OutputStream out = new FileOutputStream(temp);
-        out.write(decompressed, 0, decompressed.length - len - 8);
-        out.close();
+        try (OutputStream out = Files.newOutputStream(temp)) {
+            out.write(decompressed, 0, decompressed.length - len - 8);
+        }
 
         try (FileOutputStream jarBytes = new FileOutputStream(dest); JarOutputStream jos = new JarOutputStream(jarBytes)) {
-            Pack200.newUnpacker().unpack(temp, jos);
+            Pack200.newUnpacker().unpack(temp.toFile(), jos);
 
             JarEntry checksumsFile = new JarEntry("checksums.sha1");
             checksumsFile.setTime(0L);
@@ -215,6 +243,6 @@ public class LibraryDownloadTask extends Task {
             jos.closeEntry();
         }
 
-        temp.delete();
+        Files.delete(temp);
     }
 }

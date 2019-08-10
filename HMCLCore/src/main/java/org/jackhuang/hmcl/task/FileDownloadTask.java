@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,17 +13,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.task;
 
 import org.jackhuang.hmcl.event.EventManager;
 import org.jackhuang.hmcl.event.FailedEvent;
-import org.jackhuang.hmcl.util.*;
-import org.jackhuang.hmcl.util.io.ChecksumMismatchException;
-import org.jackhuang.hmcl.util.io.FileUtils;
-import org.jackhuang.hmcl.util.io.IOUtils;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
+import org.jackhuang.hmcl.util.CacheRepository;
+import org.jackhuang.hmcl.util.Logging;
+import org.jackhuang.hmcl.util.io.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,6 +30,7 @@ import java.io.RandomAccessFile;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Optional;
@@ -45,7 +44,7 @@ import static org.jackhuang.hmcl.util.DigestUtils.getDigest;
  *
  * @author huangyuhui
  */
-public class FileDownloadTask extends Task {
+public class FileDownloadTask extends Task<Void> {
 
     public static class IntegrityCheck {
         private String algorithm;
@@ -122,6 +121,7 @@ public class FileDownloadTask extends Task {
         this.retry = retry;
 
         setName(file.getName());
+        setExecutor(Schedulers.io());
     }
 
     private void closeFiles() {
@@ -141,11 +141,6 @@ public class FileDownloadTask extends Task {
                 Logging.LOG.log(Level.WARNING, "Failed to close stream", e);
             }
         stream = null;
-    }
-
-    @Override
-    public Scheduler getScheduler() {
-        return Schedulers.io();
     }
 
     public EventManager<FailedEvent<URL>> getOnFailed() {
@@ -211,7 +206,7 @@ public class FileDownloadTask extends Task {
                 break;
             }
 
-            File temp = null;
+            Path temp = null;
 
             try {
                 updateProgress(0);
@@ -231,7 +226,7 @@ public class FileDownloadTask extends Task {
                         repository.removeRemoteEntry(con);
                     }
                 } else if (con.getResponseCode() / 100 != 2) {
-                    throw new IOException("Server error, response code: " + con.getResponseCode());
+                    throw new ResponseCodeException(currentURL, con.getResponseCode());
                 }
 
                 int contentLength = con.getContentLength();
@@ -241,15 +236,15 @@ public class FileDownloadTask extends Task {
                 if (!FileUtils.makeDirectory(file.getAbsoluteFile().getParentFile()))
                     throw new IOException("Could not make directory " + file.getAbsoluteFile().getParent());
 
-                temp = FileUtils.createTempFile();
-                rFile = new RandomAccessFile(temp, "rw");
+                temp = Files.createTempFile(null, null);
+                rFile = new RandomAccessFile(temp.toFile(), "rw");
 
                 MessageDigest digest = integrityCheck == null ? null : integrityCheck.createDigest();
 
                 stream = con.getInputStream();
                 int lastDownloaded = 0, downloaded = 0;
                 long lastTime = System.currentTimeMillis();
-                byte buffer[] = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
+                byte[] buffer = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
                 while (true) {
                     if (Thread.interrupted()) {
                         Thread.currentThread().interrupt();
@@ -282,16 +277,15 @@ public class FileDownloadTask extends Task {
 
                 // Restore temp file to original name.
                 if (Thread.interrupted()) {
-                    temp.delete();
+                    temp.toFile().delete();
                     Thread.currentThread().interrupt();
                     break;
                 } else {
-                    if (file.exists() && !file.delete())
-                        throw new IOException("Unable to delete existent file " + file);
+                    Files.deleteIfExists(file.toPath());
                     if (!FileUtils.makeDirectory(file.getAbsoluteFile().getParentFile()))
                         throw new IOException("Unable to make parent directory " + file);
                     try {
-                        FileUtils.moveFile(temp, file);
+                        FileUtils.moveFile(temp.toFile(), file);
                     } catch (Exception e) {
                         throw new IOException("Unable to move temp file from " + temp + " to " + file, e);
                     }
@@ -320,7 +314,7 @@ public class FileDownloadTask extends Task {
                 return;
             } catch (IOException | IllegalStateException e) {
                 if (temp != null)
-                    temp.delete();
+                    temp.toFile().delete();
                 exception = e;
             } finally {
                 closeFiles();
@@ -328,7 +322,7 @@ public class FileDownloadTask extends Task {
         }
 
         if (exception != null)
-            throw new IOException("Unable to download file " + currentURL + ". " + exception.getMessage(), exception);
+            throw new DownloadException(currentURL, exception);
     }
 
 }

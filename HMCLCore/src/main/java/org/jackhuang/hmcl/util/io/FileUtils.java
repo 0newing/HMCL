@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,9 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util.io;
+
+import org.jackhuang.hmcl.util.Lang;
+import org.jackhuang.hmcl.util.StringUtils;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -28,9 +31,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
-import org.jackhuang.hmcl.util.Lang;
-import org.jackhuang.hmcl.util.StringUtils;
-
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
@@ -40,6 +40,37 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 public final class FileUtils {
 
     private FileUtils() {
+    }
+
+    public static boolean canCreateDirectory(String path) {
+        try {
+            return canCreateDirectory(Paths.get(path));
+        } catch (InvalidPathException e) {
+            return false;
+        }
+    }
+
+    public static boolean canCreateDirectory(Path path) {
+        if (Files.isDirectory(path)) return true;
+        else if (Files.exists(path)) return false;
+        else {
+            Path lastPath = path; // always not exist
+            path = path.getParent();
+            // find existent ancestor
+            while (path != null && !Files.exists(path)) {
+                lastPath = path;
+                path = path.getParent();
+            }
+            if (path == null) return false; // all ancestors are nonexistent
+            if (!Files.isDirectory(path)) return false; // ancestor is file
+            try {
+                Files.createDirectory(lastPath); // check permission
+                Files.delete(lastPath); // safely delete empty directory
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
+        }
     }
 
     public static String getNameWithoutExtension(File file) {
@@ -69,6 +100,11 @@ public final class FileUtils {
         return StringUtils.removeSuffix(path.getFileName().toString(), "/", "\\");
     }
 
+    public static String getName(Path path, String candidate) {
+        if (path.getFileName() == null) return candidate;
+        else return getName(path);
+    }
+
     public static String readText(File file) throws IOException {
         return readText(file, UTF_8);
     }
@@ -85,14 +121,43 @@ public final class FileUtils {
         return new String(Files.readAllBytes(file), charset);
     }
 
+    /**
+     * Write plain text to file. Characters are encoded into bytes using UTF-8.
+     *
+     * We don't care about platform difference of line separator. Because readText accept all possibilities of line separator.
+     * It will create the file if it does not exist, or truncate the existing file to empty for rewriting.
+     * All characters in text will be written into the file in binary format. Existing data will be erased.
+     * @param file the path to the file
+     * @param text the text being written to file
+     * @throws IOException if an I/O error occurs
+     */
     public static void writeText(File file, String text) throws IOException {
         writeText(file, text, UTF_8);
     }
 
+    /**
+     * Write plain text to file.
+     *
+     * We don't care about platform difference of line separator. Because readText accept all possibilities of line separator.
+     * It will create the file if it does not exist, or truncate the existing file to empty for rewriting.
+     * All characters in text will be written into the file in binary format. Existing data will be erased.
+     * @param file the path to the file
+     * @param text the text being written to file
+     * @param charset the charset to use for encoding
+     * @throws IOException if an I/O error occurs
+     */
     public static void writeText(File file, String text, Charset charset) throws IOException {
         writeBytes(file, text.getBytes(charset));
     }
 
+    /**
+     * Write byte array to file.
+     * It will create the file if it does not exist, or truncate the existing file to empty for rewriting.
+     * All bytes in byte array will be written into the file in binary format. Existing data will be erased.
+     * @param file the path to the file
+     * @param array the data being written to file
+     * @throws IOException if an I/O error occurs
+     */
     public static void writeBytes(File file, byte[] array) throws IOException {
         Files.createDirectories(file.toPath().getParent());
         Files.write(file.toPath(), array);
@@ -122,6 +187,14 @@ public final class FileUtils {
         }
     }
 
+    /**
+     * Copy directory.
+     * Paths of all files relative to source directory will be the same as the ones relative to destination directory.
+     *
+     * @param src the source directory.
+     * @param dest the destination directory, which will be created if not existing.
+     * @throws IOException if an I/O error occurs.
+     */
     public static void copyDirectory(Path src, Path dest) throws IOException {
         Files.walkFileTree(src, new SimpleFileVisitor<Path>(){
             @Override
@@ -142,6 +215,20 @@ public final class FileUtils {
         });
     }
 
+    /**
+     * Move file to trash.
+     *
+     * This method is only implemented in Java 9. Please check we are using Java 9 by invoking isMovingToTrashSupported.
+     * Example:
+     * <pre>{@code
+     * if (FileUtils.isMovingToTrashSupported()) {
+     *     FileUtils.moveToTrash(file);
+     * }
+     * }</pre>
+     * @param file the file being moved to trash.
+     * @see FileUtils#isMovingToTrashSupported()
+     * @return false if moveToTrash does not exist, or platform does not support Desktop.Action.MOVE_TO_TRASH
+     */
     public static boolean moveToTrash(File file) {
         try {
             java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
@@ -195,6 +282,15 @@ public final class FileUtils {
             throw exception;
     }
 
+    public static boolean cleanDirectoryQuietly(File directory) {
+        try {
+            cleanDirectory(directory);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     public static void forceDelete(File file)
             throws IOException {
         if (file.isDirectory()) {
@@ -244,13 +340,30 @@ public final class FileUtils {
         Files.copy(srcFile.toPath(), destFile.toPath(), StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
     }
 
+    public static void copyFile(Path srcFile, Path destFile)
+            throws IOException {
+        Objects.requireNonNull(srcFile, "Source must not be null");
+        Objects.requireNonNull(destFile, "Destination must not be null");
+        if (!Files.exists(srcFile))
+            throw new FileNotFoundException("Source '" + srcFile + "' does not exist");
+        if (Files.isDirectory(srcFile))
+            throw new IOException("Source '" + srcFile + "' exists but is a directory");
+        Path parentFile = destFile.getParent();
+        Files.createDirectories(parentFile);
+        if (Files.exists(destFile) && !Files.isWritable(destFile))
+            throw new IOException("Destination '" + destFile + "' exists but is read-only");
+
+        Files.copy(srcFile, destFile, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
+    }
+
     public static void moveFile(File srcFile, File destFile) throws IOException {
         copyFile(srcFile, destFile);
         srcFile.delete();
     }
 
     public static boolean makeDirectory(File directory) {
-        return directory.isDirectory() || directory.mkdirs();
+        directory.mkdirs();
+        return directory.isDirectory();
     }
 
     public static boolean makeFile(File file) {
@@ -265,21 +378,5 @@ public final class FileUtils {
                 if (extension.equals(getExtension(it)))
                     result.add(it);
         return result;
-    }
-
-    public static File createTempFile() throws IOException {
-        return createTempFile("tmp");
-    }
-
-    public static File createTempFile(String prefix) throws IOException {
-        return createTempFile(prefix, null);
-    }
-
-    public static File createTempFile(String prefix, String suffix) throws IOException {
-        return createTempFile(prefix, suffix, null);
-    }
-
-    public static File createTempFile(String prefix, String suffix, File directory) throws IOException {
-        return File.createTempFile(prefix, suffix, directory);
     }
 }

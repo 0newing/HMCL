@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util;
 
@@ -263,7 +263,7 @@ public class CacheRepository {
         try (RandomAccessFile file = new RandomAccessFile(indexFile.toFile(), "rw"); FileChannel channel = file.getChannel()) {
             FileLock lock = channel.lock();
             try {
-                ETagIndex indexOnDisk = JsonUtils.GSON.fromJson(new String(IOUtils.readFullyWithoutClosing(Channels.newInputStream(channel)), UTF_8), ETagIndex.class);
+                ETagIndex indexOnDisk = JsonUtils.fromMaybeMalformedJson(new String(IOUtils.readFullyWithoutClosing(Channels.newInputStream(channel)), UTF_8), ETagIndex.class);
                 Map<String, ETagItem> newIndex = joinETagIndexes(indexOnDisk == null ? null : indexOnDisk.eTag, index.values());
                 channel.truncate(0);
                 OutputStream os = Channels.newOutputStream(channel);

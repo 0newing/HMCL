@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,29 +13,30 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
 import com.jfoenix.controls.*;
 import javafx.geometry.HPos;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.VPos;
+import javafx.scene.Cursor;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
-
-import static org.jackhuang.hmcl.setting.ConfigHolder.config;
-import static org.jackhuang.hmcl.ui.FXUtils.stringConverter;
-import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
-
 import org.jackhuang.hmcl.setting.EnumBackgroundImage;
 import org.jackhuang.hmcl.setting.EnumCommonDirectory;
 import org.jackhuang.hmcl.setting.Theme;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.util.i18n.Locales.SupportedLocale;
+
+import static org.jackhuang.hmcl.setting.ConfigHolder.config;
+import static org.jackhuang.hmcl.ui.FXUtils.stringConverter;
+import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public abstract class SettingsView extends StackPane {
     protected final JFXTextField txtProxyHost;
@@ -72,10 +73,42 @@ public abstract class SettingsView extends StackPane {
 
         {
             VBox rootPane = new VBox();
-            rootPane.setStyle("-fx-padding: 18;");
+            rootPane.setPadding(new Insets(36, 18, 36, 18));
             {
                 ComponentList settingsPane = new ComponentList();
                 {
+                    {
+                        StackPane sponsorPane = new StackPane();
+                        sponsorPane.setCursor(Cursor.HAND);
+                        sponsorPane.setOnMouseClicked(e -> onSponsor());
+
+                        GridPane gridPane = new GridPane();
+
+                        ColumnConstraints col = new ColumnConstraints();
+                        col.setHgrow(Priority.SOMETIMES);
+                        col.setMaxWidth(Double.POSITIVE_INFINITY);
+
+                        gridPane.getColumnConstraints().setAll(col);
+
+                        RowConstraints row = new RowConstraints();
+                        row.setMinHeight(Double.NEGATIVE_INFINITY);
+                        row.setValignment(VPos.TOP);
+                        row.setVgrow(Priority.SOMETIMES);
+                        gridPane.getRowConstraints().setAll(row);
+
+                        {
+                            Label label = new Label(i18n("sponsor.hmcl"));
+                            label.setWrapText(true);
+                            label.setTextAlignment(TextAlignment.JUSTIFY);
+                            GridPane.setRowIndex(label, 0);
+                            GridPane.setColumnIndex(label, 0);
+                            gridPane.getChildren().add(label);
+                        }
+
+                        sponsorPane.getChildren().setAll(gridPane);
+                        settingsPane.getContent().add(sponsorPane);
+                    }
+
                     ComponentSublist updatePane = new ComponentSublist();
                     updatePane.setTitle(i18n("update"));
                     updatePane.setHasSubtitle(true);
@@ -84,7 +117,7 @@ public abstract class SettingsView extends StackPane {
 
                         lblUpdate = new Label(i18n("update"));
                         lblUpdateSub = new Label();
-                        lblUpdateSub.getStyleClass().setAll("subtitle-label");
+                        lblUpdateSub.getStyleClass().add("subtitle-label");
 
                         headerLeft.getChildren().setAll(lblUpdate, lblUpdateSub);
                         updatePane.setHeaderLeft(headerLeft);
@@ -93,7 +126,7 @@ public abstract class SettingsView extends StackPane {
                     {
                         btnUpdate = new JFXButton();
                         btnUpdate.setOnMouseClicked(e -> onUpdate());
-                        btnUpdate.getStyleClass().setAll("toggle-icon4");
+                        btnUpdate.getStyleClass().add("toggle-icon4");
                         btnUpdate.setGraphic(SVG.update(Theme.blackFillBinding(), 20, 20));
 
                         updatePane.setHeaderRight(btnUpdate);
@@ -125,7 +158,7 @@ public abstract class SettingsView extends StackPane {
 
                         Label help = new Label(i18n("help"));
                         Label helpSubtitle = new Label(i18n("help.detail"));
-                        helpSubtitle.getStyleClass().setAll("subtitle-label");
+                        helpSubtitle.getStyleClass().add("subtitle-label");
 
                         headerLeft.getChildren().setAll(help, helpSubtitle);
                         updatePane.setLeft(headerLeft);
@@ -134,7 +167,7 @@ public abstract class SettingsView extends StackPane {
                     {
                         JFXButton btnExternal = new JFXButton();
                         btnExternal.setOnMouseClicked(e -> onHelp());
-                        btnExternal.getStyleClass().setAll("toggle-icon4");
+                        btnExternal.getStyleClass().add("toggle-icon4");
                         btnExternal.setGraphic(SVG.openInNew(Theme.blackFillBinding(), -1, -1));
 
                         updatePane.setRight(btnExternal);
@@ -144,9 +177,9 @@ public abstract class SettingsView extends StackPane {
 
                 {
                     fileCommonLocation = new MultiFileItem<>(true);
-                    fileCommonLocation.setTitle(i18n("launcher.common_directory"));
+                    fileCommonLocation.setTitle(i18n("launcher.cache_directory"));
                     fileCommonLocation.setDirectory(true);
-                    fileCommonLocation.setChooserTitle(i18n("launcher.common_directory.choose"));
+                    fileCommonLocation.setChooserTitle(i18n("launcher.cache_directory.choose"));
                     fileCommonLocation.setHasSubtitle(true);
                     fileCommonLocation.setCustomText("settings.custom");
 
@@ -338,7 +371,7 @@ public abstract class SettingsView extends StackPane {
                     {
                         JFXButton logButton = new JFXButton(i18n("settings.launcher.launcher_log.export"));
                         logButton.setOnMouseClicked(e -> onExportLogs());
-                        logButton.getStyleClass().setAll("jfx-button-border");
+                        logButton.getStyleClass().add("jfx-button-border");
 
                         logPane.setHeaderRight(logButton);
                     }
@@ -360,7 +393,7 @@ public abstract class SettingsView extends StackPane {
                                 HBox hBox = new HBox();
                                 hBox.setSpacing(3);
 
-                                cboFont = new FontComboBox(12, false);
+                                cboFont = new FontComboBox(12);
                                 txtFontSize = new JFXTextField();
                                 FXUtils.setLimitWidth(txtFontSize, 50);
                                 hBox.getChildren().setAll(cboFont, txtFontSize);
@@ -492,4 +525,5 @@ public abstract class SettingsView extends StackPane {
     protected abstract void onUpdate();
     protected abstract void onHelp();
     protected abstract void onExportLogs();
+    protected abstract void onSponsor();
 }

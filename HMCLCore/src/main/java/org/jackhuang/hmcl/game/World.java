@@ -1,3 +1,20 @@
+/*
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package org.jackhuang.hmcl.game;
 
 import com.github.steveice10.opennbt.NBTIO;
@@ -11,6 +28,7 @@ import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.Unzipper;
 import org.jackhuang.hmcl.util.io.Zipper;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,10 +36,10 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -70,17 +88,27 @@ public class World {
         return gameVersion;
     }
 
+    private void loadFromZipImpl(Path root) throws IOException {
+        Path levelDat = root.resolve("level.dat");
+        if (!Files.exists(levelDat))
+            throw new IllegalArgumentException("Not a valid world zip file since level.dat cannot be found.");
+
+        getWorldName(levelDat);
+    }
+
     private void loadFromZip() throws IOException {
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(file)) {
+        try (FileSystem fs = CompressingUtils.readonly(file).setAutoDetectEncoding(true).build()) {
+            Path cur = fs.getPath("/level.dat");
+            if (Files.isRegularFile(cur)) {
+                fileName = FileUtils.getName(file);
+                loadFromZipImpl(fs.getPath("/"));
+                return;
+            }
+
             Path root = Files.list(fs.getPath("/")).filter(Files::isDirectory).findAny()
                     .orElseThrow(() -> new IOException("Not a valid world zip file"));
-
-            Path levelDat = root.resolve("level.dat");
-            if (!Files.exists(levelDat))
-                throw new IllegalArgumentException("Not a valid world zip file since level.dat cannot be found.");
-
             fileName = FileUtils.getName(root);
-            getWorldName(levelDat);
+            loadFromZipImpl(root);
         }
     }
 
@@ -132,17 +160,24 @@ public class World {
         }
 
         if (Files.isRegularFile(file)) {
-            String subDirectoryName;
-            try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(file)) {
-                List<Path> subDirs = Files.list(fs.getPath("/")).collect(Collectors.toList());
-                if (subDirs.size() != 1) {
-                    throw new IOException("World zip malformed");
+            try (FileSystem fs = CompressingUtils.readonly(file).setAutoDetectEncoding(true).build()) {
+                Path cur = fs.getPath("/level.dat");
+                if (Files.isRegularFile(cur)) {
+                    fileName = FileUtils.getName(file);
+
+                    new Unzipper(file, worldDir).unzip();
+                } else {
+                    List<Path> subDirs = Files.list(fs.getPath("/")).collect(Collectors.toList());
+                    if (subDirs.size() != 1) {
+                        throw new IOException("World zip malformed");
+                    }
+                    String subDirectoryName = FileUtils.getName(subDirs.get(0));
+                    new Unzipper(file, worldDir)
+                            .setSubDirectory("/" + subDirectoryName + "/")
+                            .unzip();
                 }
-                subDirectoryName = FileUtils.getName(subDirs.get(0));
+
             }
-            new Unzipper(file, worldDir)
-                    .setSubDirectory("/" + subDirectoryName + "/")
-                    .unzip();
             new World(worldDir).rename(name);
         } else if (Files.isDirectory(file)) {
             FileUtils.copyDirectory(file, worldDir);
@@ -159,7 +194,7 @@ public class World {
     }
 
     private static CompoundTag parseLevelDat(Path path) throws IOException {
-        try (InputStream is = new GZIPInputStream(Files.newInputStream(path))) {
+        try (InputStream is = new BufferedInputStream(new GZIPInputStream(Files.newInputStream(path)))) {
             Tag nbt = NBTIO.readTag(is);
             if (nbt instanceof CompoundTag)
                 return (CompoundTag) nbt;
@@ -168,20 +203,20 @@ public class World {
         }
     }
 
-    public static List<World> getWorlds(Path savesDir) {
-        List<World> worlds = new ArrayList<>();
+    public static Stream<World> getWorlds(Path savesDir) {
         try {
             if (Files.exists(savesDir))
-                for (Path world : Files.newDirectoryStream(savesDir)) {
+                return Files.list(savesDir).flatMap(world -> {
                     try {
-                        worlds.add(new World(world));
+                        return Stream.of(new World(world));
                     } catch (IOException | IllegalArgumentException e) {
                         Logging.LOG.log(Level.WARNING, "Failed to read world " + world, e);
+                        return Stream.empty();
                     }
-                }
+                });
         } catch (IOException e) {
             Logging.LOG.log(Level.WARNING, "Failed to read saves", e);
         }
-        return worlds;
+        return Stream.empty();
     }
 }

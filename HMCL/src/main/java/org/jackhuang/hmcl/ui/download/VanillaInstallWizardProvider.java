@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.download;
 
@@ -22,7 +22,6 @@ import org.jackhuang.hmcl.download.DownloadProvider;
 import org.jackhuang.hmcl.download.GameBuilder;
 import org.jackhuang.hmcl.download.RemoteVersion;
 import org.jackhuang.hmcl.setting.Profile;
-import org.jackhuang.hmcl.setting.Profiles;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.wizard.WizardController;
@@ -33,18 +32,18 @@ import java.util.Map;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class VanillaInstallWizardProvider implements WizardProvider {
-    private Profile profile;
+    private final Profile profile;
 
-    public VanillaInstallWizardProvider() {
+    public VanillaInstallWizardProvider(Profile profile) {
+        this.profile = profile;
     }
 
     @Override
     public void start(Map<String, Object> settings) {
-        profile = Profiles.getSelectedProfile();
         settings.put(PROFILE, profile);
     }
 
-    private Task finishVersionDownloadingAsync(Map<String, Object> settings) {
+    private Task<Void> finishVersionDownloadingAsync(Map<String, Object> settings) {
         GameBuilder builder = profile.getDependency().gameBuilder();
 
         String name = (String) settings.get("name");
@@ -60,14 +59,14 @@ public final class VanillaInstallWizardProvider implements WizardProvider {
         if (settings.containsKey("optifine"))
             builder.version((RemoteVersion) settings.get("optifine"));
 
-        return builder.buildAsync().finalized((a, b) -> profile.getRepository().refreshVersions())
-                .then(Task.of(Schedulers.javafx(), () -> profile.setSelectedVersion(name)));
+        return builder.buildAsync().whenComplete(any -> profile.getRepository().refreshVersions())
+                .thenRunAsync(Schedulers.javafx(), () -> profile.setSelectedVersion(name));
     }
 
     @Override
     public Object finish(Map<String, Object> settings) {
         settings.put("success_message", i18n("install.success"));
-        settings.put("failure_message", i18n("install.failed"));
+        settings.put("failure_callback", (FailureCallback) (settings1, exception, next) -> InstallerWizardProvider.alertFailureMessage(exception, next));
 
         return finishVersionDownloadingAsync(settings);
     }

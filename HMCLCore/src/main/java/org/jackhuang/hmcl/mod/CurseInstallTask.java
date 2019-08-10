@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -23,6 +23,7 @@ import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.GameBuilder;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
@@ -37,17 +38,18 @@ import java.util.List;
  *
  * @author huangyuhui
  */
-public final class CurseInstallTask extends Task {
+public final class CurseInstallTask extends Task<Void> {
 
     private final DefaultDependencyManager dependencyManager;
     private final DefaultGameRepository repository;
     private final File zipFile;
+    private final Modpack modpack;
     private final CurseManifest manifest;
     private final String name;
     private final File run;
     private final ModpackConfiguration<CurseManifest> config;
-    private final List<Task> dependents = new LinkedList<>();
-    private final List<Task> dependencies = new LinkedList<>();
+    private final List<Task<?>> dependents = new LinkedList<>();
+    private final List<Task<?>> dependencies = new LinkedList<>();
 
     /**
      * Constructor.
@@ -58,9 +60,10 @@ public final class CurseInstallTask extends Task {
      * @param name the new version name
      * @see CurseManifest#readCurseForgeModpackManifest
      */
-    public CurseInstallTask(DefaultDependencyManager dependencyManager, File zipFile, CurseManifest manifest, String name) {
+    public CurseInstallTask(DefaultDependencyManager dependencyManager, File zipFile, Modpack modpack, CurseManifest manifest, String name) {
         this.dependencyManager = dependencyManager;
         this.zipFile = zipFile;
+        this.modpack = modpack;
         this.manifest = manifest;
         this.name = name;
         this.repository = dependencyManager.getGameRepository();
@@ -92,16 +95,16 @@ public final class CurseInstallTask extends Task {
         } catch (JsonParseException | IOException ignore) {
         }
         this.config = config;
-        dependents.add(new ModpackInstallTask<>(zipFile, run, manifest.getOverrides(), any -> true, config));
+        dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), manifest.getOverrides(), any -> true, config));
     }
 
     @Override
-    public Collection<Task> getDependents() {
+    public Collection<Task<?>> getDependents() {
         return dependents;
     }
 
     @Override
-    public Collection<Task> getDependencies() {
+    public Collection<Task<?>> getDependencies() {
         return dependencies;
     }
 
@@ -109,7 +112,7 @@ public final class CurseInstallTask extends Task {
     public void execute() throws Exception {
         if (config != null)
             for (CurseManifestFile oldCurseManifestFile : config.getManifest().getFiles()) {
-                if (oldCurseManifestFile.getFileName() == null) continue;
+                if (StringUtils.isBlank(oldCurseManifestFile.getFileName())) continue;
                 File oldFile = new File(run, "mods/" + oldCurseManifestFile.getFileName());
                 if (!oldFile.exists()) continue;
                 if (manifest.getFiles().stream().noneMatch(oldCurseManifestFile::equals))
@@ -121,7 +124,7 @@ public final class CurseInstallTask extends Task {
         FileUtils.writeText(new File(root, "manifest.json"), JsonUtils.GSON.toJson(manifest));
 
         dependencies.add(new CurseCompletionTask(dependencyManager, name, manifest));
-        dependencies.add(new MinecraftInstanceTask<>(zipFile, manifest.getOverrides(), manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)));
+        dependencies.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), manifest.getOverrides(), manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)));
     }
 
     public static final String MODPACK_TYPE = "Curse";

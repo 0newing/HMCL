@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,13 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.construct;
 
-import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.ReadOnlyBooleanWrapper;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.event.Event;
 import javafx.event.EventHandler;
@@ -34,24 +32,29 @@ import org.jackhuang.hmcl.util.Logging;
 
 import java.util.Optional;
 import java.util.Stack;
+import java.util.logging.Level;
 
 public class Navigator extends StackPane {
     private static final String PROPERTY_DIALOG_CLOSE_HANDLER = Navigator.class.getName() + ".closeListener";
 
     private final Stack<Node> stack = new Stack<>();
     private final TransitionHandler animationHandler = new TransitionHandler(this);
-    private final ReadOnlyBooleanWrapper canGoBack = new ReadOnlyBooleanWrapper();
+    private boolean initialized = false;
 
-    public Navigator(Node init) {
+    public void init(Node init) {
         stack.push(init);
         getChildren().setAll(init);
 
-        Platform.runLater(() ->
-                fireEvent(new NavigationEvent(this, init, NavigationEvent.NAVIGATED)));
+        fireEvent(new NavigationEvent(this, init, NavigationEvent.NAVIGATED));
+
+        initialized = true;
     }
 
     public void navigate(Node node) {
         FXUtils.checkFxUserThread();
+
+        if (!initialized)
+            throw new IllegalStateException("Navigator must have a root page");
 
         Node from = stack.peek();
         if (from == node)
@@ -89,10 +92,17 @@ public class Navigator extends StackPane {
     public void close(Node from) {
         FXUtils.checkFxUserThread();
 
+        if (!initialized)
+            throw new IllegalStateException("Navigator must have a root page");
+
+        if (stack.peek() != from) {
+            // Allow page to be closed multiple times.
+            Logging.LOG.log(Level.INFO, "Closing already closed page: " + from, new Throwable());
+            return;
+        }
+
         Logging.LOG.info("Closed page " + from);
 
-        if (stack.peek() != from)
-            throw new IllegalStateException();
         stack.pop();
         Node node = stack.peek();
 

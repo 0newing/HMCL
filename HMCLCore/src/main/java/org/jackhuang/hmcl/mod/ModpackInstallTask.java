@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -23,6 +23,7 @@ import org.jackhuang.hmcl.util.io.Unzipper;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Predicate;
@@ -30,17 +31,19 @@ import java.util.function.Predicate;
 import static org.jackhuang.hmcl.util.DigestUtils.digest;
 import static org.jackhuang.hmcl.util.Hex.encodeHex;
 
-public class ModpackInstallTask<T> extends Task {
+public class ModpackInstallTask<T> extends Task<Void> {
 
     private final File modpackFile;
     private final File dest;
+    private final Charset charset;
     private final String subDirectory;
     private final List<ModpackConfiguration.FileInformation> overrides;
     private final Predicate<String> callback;
 
-    public ModpackInstallTask(File modpackFile, File dest, String subDirectory, Predicate<String> callback, ModpackConfiguration<T> oldConfiguration) {
+    public ModpackInstallTask(File modpackFile, File dest, Charset charset, String subDirectory, Predicate<String> callback, ModpackConfiguration<T> oldConfiguration) {
         this.modpackFile = modpackFile;
         this.dest = dest;
+        this.charset = charset;
         this.subDirectory = subDirectory;
         this.callback = callback;
 
@@ -64,6 +67,7 @@ public class ModpackInstallTask<T> extends Task {
                 .setSubDirectory(subDirectory)
                 .setTerminateIfSubDirectoryNotExists()
                 .setReplaceExistentFile(true)
+                .setEncoding(charset)
                 .setFilter((destPath, isDirectory, zipEntry, entryPath) -> {
                     if (isDirectory) return true;
                     if (!callback.test(entryPath)) return false;

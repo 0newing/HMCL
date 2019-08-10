@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,26 +13,24 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
 import org.jackhuang.hmcl.download.forge.ForgeInstallTask;
 import org.jackhuang.hmcl.download.forge.ForgeRemoteVersion;
-import org.jackhuang.hmcl.download.game.GameAssetDownloadTask;
-import org.jackhuang.hmcl.download.game.GameLibrariesTask;
-import org.jackhuang.hmcl.download.game.LibrariesUniqueTask;
-import org.jackhuang.hmcl.download.game.VersionJsonSaveTask;
+import org.jackhuang.hmcl.download.game.*;
 import org.jackhuang.hmcl.download.liteloader.LiteLoaderInstallTask;
 import org.jackhuang.hmcl.download.liteloader.LiteLoaderRemoteVersion;
 import org.jackhuang.hmcl.download.optifine.OptiFineInstallTask;
 import org.jackhuang.hmcl.download.optifine.OptiFineRemoteVersion;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.game.Version;
-import org.jackhuang.hmcl.task.ParallelTask;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.AutoTypingMap;
 import org.jackhuang.hmcl.util.function.ExceptionalFunction;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Note: This class has no state.
@@ -72,49 +70,71 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
     }
 
     @Override
-    public Task checkGameCompletionAsync(Version version) {
-        return new ParallelTask(
-                new GameAssetDownloadTask(this, version),
+    public Task<?> checkGameCompletionAsync(Version version) {
+        return Task.allOf(
+                Task.composeAsync(() -> {
+                    if (!repository.getVersionJar(version).exists())
+                        return new GameDownloadTask(this, null, version);
+                    else
+                        return null;
+                }),
+                new GameAssetDownloadTask(this, version, GameAssetDownloadTask.DOWNLOAD_INDEX_IF_NECESSARY),
                 new GameLibrariesTask(this, version)
         );
     }
 
     @Override
-    public Task checkLibraryCompletionAsync(Version version) {
+    public Task<?> checkLibraryCompletionAsync(Version version) {
         return new GameLibrariesTask(this, version);
     }
 
     @Override
-    public Task installLibraryAsync(String gameVersion, Version version, String libraryId, String libraryVersion) {
+    public Task<Version> installLibraryAsync(String gameVersion, Version version, String libraryId, String libraryVersion) {
         VersionList<?> versionList = getVersionList(libraryId);
-        return versionList.loadAsync(getDownloadProvider())
-                .then(variables -> installLibraryAsync(version, versionList.getVersion(gameVersion, libraryVersion)
+        return versionList.loadAsync(gameVersion, getDownloadProvider())
+                .thenComposeAsync(() -> installLibraryAsync(version, versionList.getVersion(gameVersion, libraryVersion)
                         .orElseThrow(() -> new IllegalStateException("Remote library " + libraryId + " has no version " + libraryVersion))));
     }
 
     @Override
-    public Task installLibraryAsync(Version version, RemoteVersion libraryVersion) {
+    public Task<Version> installLibraryAsync(Version oldVersion, RemoteVersion libraryVersion) {
+        Task<Version> task;
         if (libraryVersion instanceof ForgeRemoteVersion)
-            return new ForgeInstallTask(this, version, (ForgeRemoteVersion) libraryVersion)
-                    .then(variables -> new LibrariesUniqueTask(variables.get("version")))
-                    .then(variables -> new MaintainTask(variables.get("version")))
-                    .then(variables -> new VersionJsonSaveTask(repository, variables.get("version")));
+            task = new ForgeInstallTask(this, oldVersion, (ForgeRemoteVersion) libraryVersion);
         else if (libraryVersion instanceof LiteLoaderRemoteVersion)
-            return new LiteLoaderInstallTask(this, version, (LiteLoaderRemoteVersion) libraryVersion)
-                    .then(variables -> new LibrariesUniqueTask(variables.get("version")))
-                    .then(variables -> new MaintainTask(variables.get("version")))
-                    .then(variables -> new VersionJsonSaveTask(repository, variables.get("version")));
+            task = new LiteLoaderInstallTask(this, oldVersion, (LiteLoaderRemoteVersion) libraryVersion);
         else if (libraryVersion instanceof OptiFineRemoteVersion)
-            return new OptiFineInstallTask(this, version, (OptiFineRemoteVersion) libraryVersion)
-                    .then(variables -> new LibrariesUniqueTask(variables.get("version")))
-                    .then(variables -> new MaintainTask(variables.get("version")))
-                    .then(variables -> new VersionJsonSaveTask(repository, variables.get("version")));
+            task = new OptiFineInstallTask(this, oldVersion, (OptiFineRemoteVersion) libraryVersion);
         else
             throw new IllegalArgumentException("Remote library " + libraryVersion + " is unrecognized.");
+        return task
+                .thenComposeAsync(LibrariesUniqueTask::new)
+                .thenComposeAsync(MaintainTask::new)
+                .thenComposeAsync(newVersion -> new VersionJsonSaveTask(repository, newVersion));
     }
 
 
-    public ExceptionalFunction<AutoTypingMap<String>, Task, ?> installLibraryAsync(RemoteVersion libraryVersion) {
-        return var -> installLibraryAsync(var.get("version"), libraryVersion);
+    public ExceptionalFunction<Version, Task<Version>, ?> installLibraryAsync(RemoteVersion libraryVersion) {
+        return version -> installLibraryAsync(version, libraryVersion);
+    }
+
+    public Task installLibraryAsync(Version oldVersion, Path installer) {
+        return Task
+                .composeAsync(() -> {
+                    try {
+                        return ForgeInstallTask.install(this, oldVersion, installer);
+                    } catch (IOException ignore) {
+                    }
+
+                    try {
+                        return OptiFineInstallTask.install(this, oldVersion, installer);
+                    } catch (IOException ignore) {
+                    }
+
+                    throw new UnsupportedOperationException("Library cannot be recognized");
+                })
+                .thenComposeAsync(LibrariesUniqueTask::new)
+                .thenComposeAsync(MaintainTask::new)
+                .thenComposeAsync(newVersion -> new VersionJsonSaveTask(repository, newVersion));
     }
 }

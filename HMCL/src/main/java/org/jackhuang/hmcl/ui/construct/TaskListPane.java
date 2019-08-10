@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.construct;
 
@@ -24,7 +24,6 @@ import javafx.beans.property.ReadOnlyIntegerWrapper;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
 import org.jackhuang.hmcl.download.forge.ForgeInstallTask;
 import org.jackhuang.hmcl.download.game.GameAssetDownloadTask;
 import org.jackhuang.hmcl.download.liteloader.LiteLoaderInstallTask;
@@ -43,7 +42,7 @@ import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class TaskListPane extends StackPane {
     private final AdvancedListBox listBox = new AdvancedListBox();
-    private final Map<Task, ProgressListNode> nodes = new HashMap<>();
+    private final Map<Task<?>, ProgressListNode> nodes = new HashMap<>();
     private final ReadOnlyIntegerWrapper finishedTasks = new ReadOnlyIntegerWrapper();
     private final ReadOnlyIntegerWrapper totTasks = new ReadOnlyIntegerWrapper();
 
@@ -73,12 +72,12 @@ public final class TaskListPane extends StackPane {
             }
 
             @Override
-            public void onReady(Task task) {
+            public void onReady(Task<?> task) {
                 Platform.runLater(() -> totTasks.set(totTasks.getValue() + 1));
             }
 
             @Override
-            public void onRunning(Task task) {
+            public void onRunning(Task<?> task) {
                 if (!task.getSignificance().shouldShow())
                     return;
 
@@ -94,6 +93,8 @@ public final class TaskListPane extends StackPane {
                     task.setName(i18n("modpack.type.curse.completion"));
                 } else if (task instanceof ModpackInstallTask) {
                     task.setName(i18n("modpack.installing"));
+                } else if (task instanceof ModpackUpdateTask) {
+                    task.setName(i18n("modpack.update"));
                 } else if (task instanceof CurseInstallTask) {
                     task.setName(i18n("modpack.install", i18n("modpack.type.curse")));
                 } else if (task instanceof MultiMCModpackInstallTask) {
@@ -109,11 +110,10 @@ public final class TaskListPane extends StackPane {
                 ProgressListNode node = new ProgressListNode(task);
                 nodes.put(task, node);
                 Platform.runLater(() -> listBox.add(node));
-
             }
 
             @Override
-            public void onFinished(Task task) {
+            public void onFinished(Task<?> task) {
                 ProgressListNode node = nodes.remove(task);
                 if (node == null)
                     return;
@@ -125,7 +125,7 @@ public final class TaskListPane extends StackPane {
             }
 
             @Override
-            public void onFailed(Task task, Throwable throwable) {
+            public void onFailed(Task<?> task, Throwable throwable) {
                 ProgressListNode node = nodes.remove(task);
                 if (node == null)
                     return;
@@ -137,20 +137,19 @@ public final class TaskListPane extends StackPane {
         });
     }
 
-    private static class ProgressListNode extends VBox {
+    private static class ProgressListNode extends BorderPane {
         private final JFXProgressBar bar = new JFXProgressBar();
         private final Label title = new Label();
         private final Label state = new Label();
 
-        public ProgressListNode(Task task) {
+        public ProgressListNode(Task<?> task) {
             bar.progressProperty().bind(task.progressProperty());
             title.setText(task.getName());
             state.textProperty().bind(task.messageProperty());
 
-            BorderPane borderPane = new BorderPane();
-            borderPane.setLeft(title);
-            borderPane.setRight(state);
-            getChildren().addAll(borderPane, bar);
+            setLeft(title);
+            setRight(state);
+            setBottom(bar);
 
             bar.minWidthProperty().bind(widthProperty());
             bar.prefWidthProperty().bind(widthProperty());

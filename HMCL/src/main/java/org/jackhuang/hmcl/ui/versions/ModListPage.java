@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,14 +13,18 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import com.jfoenix.controls.JFXTabPane;
-import javafx.scene.input.TransferMode;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.collections.ObservableList;
+import javafx.scene.control.Skin;
+import javafx.scene.control.TreeItem;
 import javafx.stage.FileChooser;
+import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.mod.ModInfo;
 import org.jackhuang.hmcl.mod.ModManager;
 import org.jackhuang.hmcl.setting.Profile;
@@ -28,103 +32,76 @@ import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
-import org.jackhuang.hmcl.ui.ListPage;
+import org.jackhuang.hmcl.ui.ListPageBase;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
-public final class ModListPage extends ListPage<ModItem> {
+public final class ModListPage extends ListPageBase<ModListPageSkin.ModInfoObject> {
+    private final BooleanProperty modded = new SimpleBooleanProperty(this, "modded", false);
 
     private JFXTabPane parentTab;
     private ModManager modManager;
-    private String versionId;
+    private LibraryAnalyzer libraryAnalyzer;
 
     public ModListPage() {
-        setOnDragOver(event -> {
-            if (event.getGestureSource() != this && event.getDragboard().hasFiles())
-                event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
-            event.consume();
-        });
 
-        setOnDragDropped(event -> {
-            List<File> files = event.getDragboard().getFiles();
-            if (files != null) {
-                Collection<File> mods = files.stream()
-                        .filter(it -> Arrays.asList("jar", "zip", "litemod").contains(FileUtils.getExtension(it)))
-                        .collect(Collectors.toList());
-                if (!mods.isEmpty()) {
-                    mods.forEach(it -> {
-                        try {
-                            modManager.addMod(versionId, it);
-                        } catch (IOException | IllegalArgumentException e) {
-                            Logging.LOG.log(Level.WARNING, "Unable to parse mod file " + it, e);
-                        }
-                    });
-                    loadMods(modManager, versionId);
-                    event.setDropCompleted(true);
+        FXUtils.applyDragListener(this, it -> Arrays.asList("jar", "zip", "litemod").contains(FileUtils.getExtension(it)), mods -> {
+            mods.forEach(it -> {
+                try {
+                    modManager.addMod(it);
+                } catch (IOException | IllegalArgumentException e) {
+                    Logging.LOG.log(Level.WARNING, "Unable to parse mod file " + it, e);
                 }
-            }
-            event.consume();
+            });
+            loadMods(modManager);
         });
+    }
+
+    @Override
+    protected Skin<?> createDefaultSkin() {
+        return new ModListPageSkin(this);
+    }
+
+    public void refresh() {
+        loadMods(modManager);
     }
 
     public void loadVersion(Profile profile, String id) {
-        loadMods(profile.getModManager(), id);
+        libraryAnalyzer = LibraryAnalyzer.analyze(profile.getRepository().getResolvedVersion(id));
+        modded.set(libraryAnalyzer.hasModLoader());
+        loadMods(profile.getRepository().getModManager(id));
     }
 
-    public void loadMods(ModManager modManager, String versionId) {
+    private void loadMods(ModManager modManager) {
         this.modManager = modManager;
-        this.versionId = versionId;
-        Task.of(variables -> {
+        Task.supplyAsync(() -> {
             synchronized (ModListPage.this) {
-                JFXUtilities.runInFX(() -> loadingProperty().set(true));
-
-                modManager.refreshMods(versionId);
-
-                // Surprisingly, if there are a great number of mods, this processing will cause a long UI pause,
-                // constructing UI elements.
-                // We must do this asynchronously.
-                LinkedList<ModItem> list = new LinkedList<>();
-                for (ModInfo modInfo : modManager.getMods(versionId)) {
-                    ModItem item = new ModItem(modInfo, i -> {
-                        modManager.removeMods(versionId, modInfo);
-                        loadMods(modManager, versionId);
-                    });
-                    modInfo.activeProperty().addListener((a, b, newValue) -> {
-                        if (newValue)
-                            item.getStyleClass().remove("disabled");
-                        else
-                            item.getStyleClass().add("disabled");
-                    });
-                    if (!modInfo.isActive())
-                        item.getStyleClass().add("disabled");
-
-                    list.add(item);
-                }
-
-                variables.set("list", list);
+                runInFX(() -> loadingProperty().set(true));
+                modManager.refreshMods();
+                return new LinkedList<>(modManager.getMods());
             }
-        }).finalized(Schedulers.javafx(), (variables, isDependentsSucceeded) -> {
+        }).whenComplete(Schedulers.javafx(), (list, exception) -> {
             loadingProperty().set(false);
-            if (isDependentsSucceeded)
+            if (exception == null)
                 FXUtils.onWeakChangeAndOperate(parentTab.getSelectionModel().selectedItemProperty(), newValue -> {
                     if (newValue != null && newValue.getUserData() == ModListPage.this)
-                        itemsProperty().setAll(variables.<List<ModItem>>get("list"));
+                        itemsProperty().setAll(list.stream().map(ModListPageSkin.ModInfoObject::new).collect(Collectors.toList()));
                 });
         }).start();
     }
 
-    @Override
     public void add() {
         FileChooser chooser = new FileChooser();
         chooser.setTitle(i18n("mods.choose_mod"));
@@ -135,10 +112,10 @@ public final class ModListPage extends ListPage<ModItem> {
         List<String> succeeded = new LinkedList<>();
         List<String> failed = new LinkedList<>();
         if (res == null) return;
-        Task.of(variables -> {
+        Task.runAsync(() -> {
             for (File file : res) {
                 try {
-                    modManager.addMod(versionId, file);
+                    modManager.addMod(file);
                     succeeded.add(file.getName());
                 } catch (Exception e) {
                     Logging.LOG.log(Level.WARNING, "Unable to add mod " + file, e);
@@ -147,18 +124,57 @@ public final class ModListPage extends ListPage<ModItem> {
                     // Actually addMod will not throw exceptions because FileChooser has already filtered files.
                 }
             }
-        }).with(Task.of(Schedulers.javafx(), variables -> {
+        }).withRunAsync(Schedulers.javafx(), () -> {
             List<String> prompt = new LinkedList<>();
             if (!succeeded.isEmpty())
                 prompt.add(i18n("mods.add.success", String.join(", ", succeeded)));
             if (!failed.isEmpty())
                 prompt.add(i18n("mods.add.failed", String.join(", ", failed)));
             Controllers.dialog(String.join("\n", prompt), i18n("mods.add"));
-            loadMods(modManager, versionId);
-        })).start();
+            loadMods(modManager);
+        }).start();
     }
 
     public void setParentTab(JFXTabPane parentTab) {
         this.parentTab = parentTab;
+    }
+
+    public void removeSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+        try {
+            modManager.removeMods(selectedItems.stream()
+                    .map(TreeItem::getValue)
+                    .filter(Objects::nonNull)
+                    .map(ModListPageSkin.ModInfoObject::getModInfo)
+                    .toArray(ModInfo[]::new));
+            loadMods(modManager);
+        } catch (IOException ignore) {
+            // Fail to remove mods if the game is running or the mod is absent.
+        }
+    }
+
+    public void enableSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+        selectedItems.stream()
+                .map(TreeItem::getValue)
+                .map(ModListPageSkin.ModInfoObject::getModInfo)
+                .forEach(info -> info.setActive(true));
+    }
+
+    public void disableSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+        selectedItems.stream()
+                .map(TreeItem::getValue)
+                .map(ModListPageSkin.ModInfoObject::getModInfo)
+                .forEach(info -> info.setActive(false));
+    }
+
+    public boolean isModded() {
+        return modded.get();
+    }
+
+    public BooleanProperty moddedProperty() {
+        return modded;
+    }
+
+    public void setModded(boolean modded) {
+        this.modded.set(modded);
     }
 }

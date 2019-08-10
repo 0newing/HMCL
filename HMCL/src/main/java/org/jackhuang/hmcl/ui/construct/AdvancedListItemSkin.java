@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.construct;
 
@@ -83,7 +83,7 @@ public class AdvancedListItemSkin extends SkinBase<AdvancedListItem> {
         HBox right = new HBox();
         right.setAlignment(Pos.CENTER);
         right.setMouseTransparent(true);
-        right.getStyleClass().setAll("toggle-icon4");
+        right.getStyleClass().add("toggle-icon4");
         FXUtils.setLimitWidth(right, 40);
         FXUtils.onChangeAndOperate(skinnable.rightGraphicProperty(),
                 newGraphic -> {
@@ -99,7 +99,7 @@ public class AdvancedListItemSkin extends SkinBase<AdvancedListItem> {
                 visible -> root.setRight(visible ? right : null));
 
         stackPane.setStyle("-fx-padding: 10 16 10 16;");
-        stackPane.getStyleClass().setAll("transparent");
+        stackPane.getStyleClass().add("transparent");
         stackPane.setPickOnBounds(false);
         stackPane.getChildren().setAll(root);
 

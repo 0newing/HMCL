@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
@@ -25,7 +25,6 @@ import javafx.fxml.FXML;
 import javafx.scene.Scene;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ToggleButton;
-import javafx.scene.image.Image;
 import javafx.scene.layout.StackPane;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
@@ -35,6 +34,7 @@ import org.jackhuang.hmcl.event.EventManager;
 import org.jackhuang.hmcl.game.LauncherHelper;
 import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.Log4jLevel;
+import org.jackhuang.hmcl.util.ResourceNotFoundError;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
 import org.w3c.dom.Document;
@@ -44,6 +44,7 @@ import org.w3c.dom.Node;
 import java.util.concurrent.CountDownLatch;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 /**
@@ -65,7 +66,7 @@ public final class LogWindow extends Stage {
         setScene(new Scene(impl, 800, 480));
         getScene().getStylesheets().addAll(config().getTheme().getStylesheets());
         setTitle(i18n("logwindow.title"));
-        getIcons().add(new Image("/assets/img/icon.png"));
+        getIcons().add(newImage("/assets/img/icon.png"));
     }
 
     public LogWindow(String text) {
@@ -174,7 +175,7 @@ public final class LogWindow extends Stage {
             FXUtils.loadFXML(this, "/assets/fxml/log.fxml");
 
             engine = webView.getEngine();
-            engine.loadContent(Lang.ignoringException(() -> IOUtils.readFullyAsString(getClass().getResourceAsStream("/assets/log-window-content.html")))
+            engine.loadContent(Lang.ignoringException(() -> IOUtils.readFullyAsString(ResourceNotFoundError.getResourceAsStream("/assets/log-window-content.html")))
                     .replace("${FONT}", config().getFontSize() + "px \"" + config().getFontFamily() + "\""));
             engine.getLoadWorker().stateProperty().addListener((a, b, newValue) -> {
                 if (newValue == Worker.State.SUCCEEDED) {
@@ -201,11 +202,11 @@ public final class LogWindow extends Stage {
             if (!flag)
                 cboLines.getSelectionModel().select(0);
 
-            btnFatals.textProperty().bind(Bindings.createStringBinding(() -> Integer.toString(fatal.get()) + " fatals", fatal));
-            btnErrors.textProperty().bind(Bindings.createStringBinding(() -> Integer.toString(error.get()) + " errors", error));
-            btnWarns.textProperty().bind(Bindings.createStringBinding(() -> Integer.toString(warn.get()) + " warns", warn));
-            btnInfos.textProperty().bind(Bindings.createStringBinding(() -> Integer.toString(info.get()) + " infos", info));
-            btnDebugs.textProperty().bind(Bindings.createStringBinding(() -> Integer.toString(debug.get()) + " debugs", debug));
+            btnFatals.textProperty().bind(Bindings.concat(fatal, " fatals"));
+            btnErrors.textProperty().bind(Bindings.concat(error, " errors"));
+            btnWarns.textProperty().bind(Bindings.concat(warn, " warns"));
+            btnInfos.textProperty().bind(Bindings.concat(info, " infos"));
+            btnDebugs.textProperty().bind(Bindings.concat(debug, " debugs"));
 
             btnFatals.selectedProperty().addListener(o -> specificChanged());
             btnErrors.selectedProperty().addListener(o -> specificChanged());

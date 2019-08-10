@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,15 +13,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download;
 
 import org.jackhuang.hmcl.download.game.*;
 import org.jackhuang.hmcl.game.Version;
-import org.jackhuang.hmcl.task.ParallelTask;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.AutoTypingMap;
 import org.jackhuang.hmcl.util.function.ExceptionalFunction;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 
@@ -48,38 +46,39 @@ public class DefaultGameBuilder extends GameBuilder {
     }
 
     @Override
-    public Task buildAsync() {
-        return new VersionJsonDownloadTask(gameVersion, dependencyManager).then(variables -> {
-            Version version = JsonUtils.GSON.fromJson(variables.<String>get(VersionJsonDownloadTask.ID), Version.class);
-            version = version.setId(name).setJar(null);
-            variables.set("version", version);
-            Task result = downloadGameAsync(gameVersion, version).then(new ParallelTask(
-                    new GameAssetDownloadTask(dependencyManager, version),
+    public Task<?> buildAsync() {
+        return new VersionJsonDownloadTask(gameVersion, dependencyManager).thenComposeAsync(rawJson -> {
+            Version original = JsonUtils.GSON.fromJson(rawJson, Version.class);
+            Version version = original.setId(name).setJar(null);
+            Task<?> vanillaTask = downloadGameAsync(gameVersion, version).thenComposeAsync(Task.allOf(
+                    new GameAssetDownloadTask(dependencyManager, version, GameAssetDownloadTask.DOWNLOAD_INDEX_FORCIBLY),
                     new GameLibrariesTask(dependencyManager, version) // Game libraries will be downloaded for multiple times partly, this time is for vanilla libraries.
-            ).with(new VersionJsonSaveTask(dependencyManager.getGameRepository(), version))); // using [with] because download failure here are tolerant.
+            ).withComposeAsync(new VersionJsonSaveTask(dependencyManager.getGameRepository(), version))); // using [with] because download failure here are tolerant.
+
+            Task<Version> libraryTask = vanillaTask.thenSupplyAsync(() -> version);
 
             if (toolVersions.containsKey("forge"))
-                result = result.then(libraryTaskHelper(gameVersion, "forge"));
+                libraryTask = libraryTask.thenComposeAsync(libraryTaskHelper(gameVersion, "forge"));
             if (toolVersions.containsKey("liteloader"))
-                result = result.then(libraryTaskHelper(gameVersion, "liteloader"));
+                libraryTask = libraryTask.thenComposeAsync(libraryTaskHelper(gameVersion, "liteloader"));
             if (toolVersions.containsKey("optifine"))
-                result = result.then(libraryTaskHelper(gameVersion, "optifine"));
+                libraryTask = libraryTask.thenComposeAsync(libraryTaskHelper(gameVersion, "optifine"));
 
             for (RemoteVersion remoteVersion : remoteVersions)
-                result = result.then(dependencyManager.installLibraryAsync(remoteVersion));
+                libraryTask = libraryTask.thenComposeAsync(dependencyManager.installLibraryAsync(remoteVersion));
 
-            return result;
-        }).finalized((variables, isDependentsSucceeded) -> {
-            if (!isDependentsSucceeded)
-                dependencyManager.getGameRepository().getVersionRoot(name).delete();
+            return libraryTask;
+        }).whenComplete(exception -> {
+            if (exception != null)
+                dependencyManager.getGameRepository().removeVersionFromDisk(name);
         });
     }
 
-    private ExceptionalFunction<AutoTypingMap<String>, Task, ?> libraryTaskHelper(String gameVersion, String libraryId) {
-        return variables -> dependencyManager.installLibraryAsync(gameVersion, variables.get("version"), libraryId, toolVersions.get(libraryId));
+    private ExceptionalFunction<Version, Task<Version>, ?> libraryTaskHelper(String gameVersion, String libraryId) {
+        return version -> dependencyManager.installLibraryAsync(gameVersion, version, libraryId, toolVersions.get(libraryId));
     }
 
-    protected Task downloadGameAsync(String gameVersion, Version version) {
+    protected Task<Void> downloadGameAsync(String gameVersion, Version version) {
         return new GameDownloadTask(dependencyManager, gameVersion, version);
     }
 

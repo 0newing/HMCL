@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,17 +13,17 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
 import org.jackhuang.hmcl.util.Lang;
-import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
+import org.jackhuang.hmcl.util.io.FileUtils;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -264,18 +264,29 @@ public final class MultiMCInstanceConfiguration {
         return mmcPack;
     }
 
-    public static Modpack readMultiMCModpackManifest(File modpackFile) throws IOException {
-        MultiMCManifest manifest = MultiMCManifest.readMultiMCModpackManifest(modpackFile);
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(modpackFile.toPath())) {
-            Path root = Files.list(fs.getPath("/")).filter(Files::isDirectory).findAny()
-                    .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
-            String name = StringUtils.removeSuffix(root.normalize().getFileName().toString(), "/");
+    private static boolean testPath(Path root) {
+        return Files.exists(root.resolve("instance.cfg"));
+    }
+
+    public static Path getRootPath(Path root) throws IOException {
+        if (testPath(root)) return root;
+        Path candidate = Files.list(root).filter(Files::isDirectory).findAny()
+                .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
+        if (testPath(candidate)) return candidate;
+        throw new IOException("Not a valid MultiMC modpack");
+    }
+
+    public static Modpack readMultiMCModpackManifest(Path modpackFile, Charset encoding) throws IOException {
+        try (FileSystem fs = CompressingUtils.readonly(modpackFile).setEncoding(encoding).build()) {
+            Path root = getRootPath(fs.getPath("/"));
+            MultiMCManifest manifest = MultiMCManifest.readMultiMCModpackManifest(root);
+            String name = FileUtils.getName(root, FileUtils.getNameWithoutExtension(modpackFile));
 
             Path instancePath = root.resolve("instance.cfg");
             if (Files.notExists(instancePath))
                 throw new IOException("`instance.cfg` not found, " + modpackFile + " is not a valid MultiMC modpack.");
             MultiMCInstanceConfiguration cfg = new MultiMCInstanceConfiguration(name, Files.newInputStream(instancePath), manifest);
-            return new Modpack(cfg.getName(), "", "", cfg.getGameVersion(), cfg.getNotes(), cfg);
+            return new Modpack(cfg.getName(), "", "", cfg.getGameVersion(), cfg.getNotes(), encoding, cfg);
         }
     }
 }

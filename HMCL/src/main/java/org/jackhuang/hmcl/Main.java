@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl;
 
@@ -31,6 +31,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.logging.Level;
 
+import static org.jackhuang.hmcl.util.Lang.thread;
 import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -39,10 +40,13 @@ public final class Main {
     public static void main(String[] args) {
         System.setProperty("java.net.useSystemProxies", "true");
         System.setProperty("http.agent", "HMCL/" + Metadata.VERSION);
+        System.setProperty("javafx.autoproxy.disable", "true");
 
         checkJavaFX();
         checkDirectoryPath();
-        checkDSTRootCAX3();
+
+        // This environment check will take ~300ms
+        thread(Main::checkDSTRootCAX3, "CA Certificate Check", true);
 
         Logging.start(Metadata.HMCL_DIRECTORY.resolve("logs"));
 

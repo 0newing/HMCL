@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -24,6 +24,7 @@ import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.LinkedList;
@@ -32,16 +33,18 @@ import java.util.List;
 import static org.jackhuang.hmcl.util.DigestUtils.digest;
 import static org.jackhuang.hmcl.util.Hex.encodeHex;
 
-public final class MinecraftInstanceTask<T> extends Task {
+public final class MinecraftInstanceTask<T> extends Task<Void> {
 
     private final File zipFile;
+    private final Charset encoding;
     private final String subDirectory;
     private final File jsonFile;
     private final T manifest;
     private final String type;
 
-    public MinecraftInstanceTask(File zipFile, String subDirectory, T manifest, String type, File jsonFile) {
+    public MinecraftInstanceTask(File zipFile, Charset encoding, String subDirectory, T manifest, String type, File jsonFile) {
         this.zipFile = zipFile;
+        this.encoding = encoding;
         this.subDirectory = FileUtils.normalizePath(subDirectory);
         this.manifest = manifest;
         this.jsonFile = jsonFile;
@@ -55,7 +58,7 @@ public final class MinecraftInstanceTask<T> extends Task {
     public void execute() throws Exception {
         List<ModpackConfiguration.FileInformation> overrides = new LinkedList<>();
 
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(zipFile.toPath())) {
+        try (FileSystem fs = CompressingUtils.readonly(zipFile.toPath()).setEncoding(encoding).build()) {
             Path root = fs.getPath(subDirectory);
 
             if (Files.exists(root))

@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -41,18 +41,22 @@ public final class CurseManifestFile implements Validation {
     
     @SerializedName("fileName")
     private final String fileName;
+
+    @SerializedName("url")
+    private final String url;
     
     @SerializedName("required")
     private final boolean required;
 
     public CurseManifestFile() {
-        this(0, 0, "", true);
+        this(0, 0, null, null, true);
     }
 
-    public CurseManifestFile(int projectID, int fileID, String fileName, boolean required) {
+    public CurseManifestFile(int projectID, int fileID, String fileName, String url, boolean required) {
         this.projectID = projectID;
         this.fileID = fileID;
         this.fileName = fileName;
+        this.url = url;
         this.required = required;
     }
 
@@ -79,11 +83,16 @@ public final class CurseManifestFile implements Validation {
     }
 
     public URL getUrl() {
-        return NetworkUtils.toURL("https://minecraft.curseforge.com/projects/" + projectID + "/files/" + fileID + "/download");
+        return url == null ? NetworkUtils.toURL("https://www.curseforge.com/minecraft/mc-mods/" + projectID + "/download/" + fileID + "/file")
+                : NetworkUtils.toURL(url);
     }
-    
+
     public CurseManifestFile withFileName(String fileName) {
-        return new CurseManifestFile(projectID, fileID, fileName, required);
+        return new CurseManifestFile(projectID, fileID, fileName, url, required);
+    }
+
+    public CurseManifestFile withURL(String url) {
+        return new CurseManifestFile(projectID, fileID, fileName, url, required);
     }
 
     @Override

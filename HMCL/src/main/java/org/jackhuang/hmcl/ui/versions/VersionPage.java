@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
@@ -26,7 +26,6 @@ import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.fxml.FXML;
 import javafx.scene.control.Tab;
 import javafx.scene.layout.StackPane;
-import org.jackhuang.hmcl.download.game.GameAssetIndexDownloadTask;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.setting.Theme;
 import org.jackhuang.hmcl.ui.FXUtils;
@@ -95,19 +94,18 @@ public final class VersionPage extends StackPane implements DecoratorPage {
         PopupMenu managementList = new PopupMenu();
         managementPopup = new JFXPopup(managementList);
         managementList.getContent().setAll(
-                new IconedMenuItem(null, i18n("version.manage.rename"), FXUtils.withJFXPopupClosing(() -> Versions.renameVersion(profile, version), managementPopup)),
-                new IconedMenuItem(null, i18n("version.manage.remove"), FXUtils.withJFXPopupClosing(() -> Versions.deleteVersion(profile, version), managementPopup)),
-                new IconedMenuItem(null, i18n("version.manage.redownload_assets_index"), FXUtils.withJFXPopupClosing(() -> new GameAssetIndexDownloadTask(profile.getDependency(), profile.getRepository().getResolvedVersion(version)).start(), managementPopup)),
-                new IconedMenuItem(null, i18n("version.manage.remove_libraries"), FXUtils.withJFXPopupClosing(() -> FileUtils.deleteDirectoryQuietly(new File(profile.getRepository().getBaseDirectory(), "libraries")), managementPopup))
+                new IconedMenuItem(null, i18n("version.manage.redownload_assets_index"), FXUtils.withJFXPopupClosing(() -> Versions.updateGameAssets(profile, version), managementPopup)),
+                new IconedMenuItem(null, i18n("version.manage.remove_libraries"), FXUtils.withJFXPopupClosing(() -> FileUtils.deleteDirectoryQuietly(new File(profile.getRepository().getBaseDirectory(), "libraries")), managementPopup)),
+                new IconedMenuItem(null, i18n("version.manage.clean"), FXUtils.withJFXPopupClosing(() -> Versions.cleanVersion(profile, version), managementPopup)).addTooltip(i18n("version.manage.clean.tooltip"))
         );
 
-        FXUtils.installTooltip(btnDelete, i18n("version.manage.remove"));
-        FXUtils.installTooltip(btnBrowseMenu, i18n("settings.game.exploration"));
-        FXUtils.installTooltip(btnManagementMenu, i18n("settings.game.management"));
-        FXUtils.installTooltip(btnExport, i18n("modpack.export"));
+        FXUtils.installFastTooltip(btnDelete, i18n("version.manage.remove"));
+        FXUtils.installFastTooltip(btnBrowseMenu, i18n("settings.game.exploration"));
+        FXUtils.installFastTooltip(btnManagementMenu, i18n("settings.game.management"));
+        FXUtils.installFastTooltip(btnExport, i18n("modpack.export"));
 
         btnTestGame.setGraphic(SVG.launch(Theme.whiteFillBinding(), 20, 20));
-        FXUtils.installTooltip(btnTestGame, i18n("version.launch.test"));
+        FXUtils.installFastTooltip(btnTestGame, i18n("version.launch.test"));
 
         setEventHandler(Navigator.NavigationEvent.NAVIGATED, this::onNavigated);
     }

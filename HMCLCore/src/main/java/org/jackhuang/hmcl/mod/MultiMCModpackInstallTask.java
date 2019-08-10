@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -21,12 +21,13 @@ import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.GameBuilder;
+import org.jackhuang.hmcl.download.MaintainTask;
 import org.jackhuang.hmcl.download.game.VersionJsonSaveTask;
-import org.jackhuang.hmcl.game.Arguments;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.game.Version;
+import org.jackhuang.hmcl.game.VersionLibraryBuilder;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.*;
+import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
@@ -39,29 +40,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
  *
  * @author huangyuhui
  */
-public final class MultiMCModpackInstallTask extends Task {
+public final class MultiMCModpackInstallTask extends Task<Void> {
 
     private final File zipFile;
+    private final Modpack modpack;
     private final MultiMCInstanceConfiguration manifest;
     private final String name;
     private final DefaultGameRepository repository;
-    private final List<Task> dependencies = new LinkedList<>();
-    private final List<Task> dependents = new LinkedList<>();
+    private final List<Task<?>> dependencies = new LinkedList<>();
+    private final List<Task<?>> dependents = new LinkedList<>();
     
-    public MultiMCModpackInstallTask(DefaultDependencyManager dependencyManager, File zipFile, MultiMCInstanceConfiguration manifest, String name) {
+    public MultiMCModpackInstallTask(DefaultDependencyManager dependencyManager, File zipFile, Modpack modpack, MultiMCInstanceConfiguration manifest, String name) {
         this.zipFile = zipFile;
+        this.modpack = modpack;
         this.manifest = manifest;
         this.name = name;
         this.repository = dependencyManager.getGameRepository();
 
-        File run = repository.getRunDirectory(name);
         File json = repository.getModpackConfiguration(name);
         if (repository.hasVersion(name) && !json.exists())
             throw new IllegalArgumentException("Version " + name + " already exists.");
@@ -87,6 +88,22 @@ public final class MultiMCModpackInstallTask extends Task {
             if (event.isFailed())
                 repository.removeVersionFromDisk(name);
         });
+    }
+    
+    @Override
+    public List<Task<?>> getDependencies() {
+        return dependencies;
+    }
+
+    @Override
+    public boolean doPreExecute() {
+        return true;
+    }
+
+    @Override
+    public void preExecute() throws Exception {
+        File run = repository.getRunDirectory(name);
+        File json = repository.getModpackConfiguration(name);
 
         ModpackConfiguration<MultiMCInstanceConfiguration> config = null;
         try {
@@ -100,26 +117,25 @@ public final class MultiMCModpackInstallTask extends Task {
         } catch (JsonParseException | IOException ignore) {
         }
 
-        dependents.add(new ModpackInstallTask<>(zipFile, run, "/" + manifest.getName() + "/minecraft", any -> true, config));
+        try (FileSystem fs = CompressingUtils.readonly(zipFile.toPath()).setEncoding(modpack.getEncoding()).build()) {
+            if (Files.exists(fs.getPath("/" + manifest.getName() + "/.minecraft")))
+                dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), "/" + manifest.getName() + "/.minecraft", any -> true, config));
+            else if (Files.exists(fs.getPath("/" + manifest.getName() + "/minecraft")))
+                dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), "/" + manifest.getName() + "/minecraft", any -> true, config));
+        }
     }
-    
+
     @Override
-    public List<Task> getDependencies() {
-        return dependencies;
-    }
-    
-    @Override
-    public List<Task> getDependents() {
+    public List<Task<?>> getDependents() {
         return dependents;
     }
     
     @Override
     public void execute() throws Exception {
-        Version version = Objects.requireNonNull(repository.readVersionJson(name));
+        Version version = repository.readVersionJson(name);
 
         try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(zipFile.toPath())) {
-            Path root = Files.list(fs.getPath("/")).filter(Files::isDirectory).findAny()
-                    .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
+            Path root = MultiMCInstanceConfiguration.getRootPath(fs.getPath("/"));
             Path patches = root.resolve("patches");
 
             if (Files.exists(patches))
@@ -127,21 +143,20 @@ public final class MultiMCModpackInstallTask extends Task {
                     if (patchJson.toString().endsWith(".json")) {
                         // If json is malformed, we should stop installing this modpack instead of skipping it.
                         MultiMCInstancePatch patch = JsonUtils.GSON.fromJson(IOUtils.readFullyAsString(Files.newInputStream(patchJson)), MultiMCInstancePatch.class);
-                        List<String> newArguments = new LinkedList<>();
-                        for (String arg : patch.getTweakers()) {
-                            newArguments.add("--tweakClass");
-                            newArguments.add(arg);
-                        }
-                        version = version
+
+                        VersionLibraryBuilder builder = new VersionLibraryBuilder(version);
+                        for (String arg : patch.getTweakers())
+                            builder.addArgument("--tweakClass", arg);
+
+                        version = builder.build()
                                 .setLibraries(Lang.merge(version.getLibraries(), patch.getLibraries()))
-                                .setMainClass(patch.getMainClass())
-                                .setArguments(version.getArguments().orElseGet(Arguments::new).addGameArguments(newArguments));
+                                .setMainClass(patch.getMainClass());
                     }
                 }
         }
 
-        dependencies.add(new VersionJsonSaveTask(repository, version));
-        dependencies.add(new MinecraftInstanceTask<>(zipFile, "/" + manifest.getName() + "/minecraft", manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)));
+        dependencies.add(new MaintainTask(version).thenComposeAsync(maintainedVersion -> new VersionJsonSaveTask(repository, maintainedVersion)));
+        dependencies.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), "/" + manifest.getName() + "/minecraft", manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)));
     }
 
     public static final String MODPACK_TYPE = "MultiMC";

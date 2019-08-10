@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,15 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
-import javafx.scene.input.TransferMode;
 import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 import org.jackhuang.hmcl.Launcher;
@@ -29,12 +26,17 @@ import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.game.HMCLGameRepository;
 import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.setting.Accounts;
+import org.jackhuang.hmcl.setting.EnumCommonDirectory;
 import org.jackhuang.hmcl.setting.Profiles;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.ui.account.AccountList;
 import org.jackhuang.hmcl.ui.account.AuthlibInjectorServersPage;
-import org.jackhuang.hmcl.ui.construct.*;
+import org.jackhuang.hmcl.ui.construct.InputDialogPane;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
+import org.jackhuang.hmcl.ui.construct.PopupMenu;
+import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
 import org.jackhuang.hmcl.ui.decorator.DecoratorController;
 import org.jackhuang.hmcl.ui.download.ModpackInstallWizardProvider;
 import org.jackhuang.hmcl.ui.profile.ProfileList;
@@ -45,7 +47,7 @@ import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.util.FutureCallback;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
-import org.jackhuang.hmcl.util.javafx.MultiStepBinding;
+import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.platform.JavaVersion;
 import org.jackhuang.hmcl.util.versioning.VersionNumber;
 
@@ -57,10 +59,11 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class Controllers {
-    public static final int UI_VERSION = 1;
 
     private static Scene scene;
     private static Stage stage;
@@ -91,17 +94,23 @@ public final class Controllers {
 
     // FXThread
     public static GameList getGameListPage() {
-        if (gameListPage == null)
+        if (gameListPage == null) {
             gameListPage = new GameList();
+            FXUtils.applyDragListener(gameListPage, it -> "zip".equals(FileUtils.getExtension(it)), modpacks -> {
+                File modpack = modpacks.get(0);
+                Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(Profiles.getSelectedProfile(), modpack), i18n("install.modpack"));
+            });
+        }
         return gameListPage;
     }
 
     // FXThread
     public static AccountList getAccountListPage() {
         if (accountListPage == null) {
-            accountListPage = new AccountList();
+            AccountList accountListPage = new AccountList();
             accountListPage.selectedAccountProperty().bindBidirectional(Accounts.selectedAccountProperty());
             accountListPage.accountsProperty().bindContent(Accounts.accountsProperty());
+            Controllers.accountListPage = accountListPage;
         }
         return accountListPage;
     }
@@ -109,9 +118,10 @@ public final class Controllers {
     // FXThread
     public static ProfileList getProfileListPage() {
         if (profileListPage == null) {
-            profileListPage = new ProfileList();
+            ProfileList profileListPage = new ProfileList();
             profileListPage.selectedProfileProperty().bindBidirectional(Profiles.selectedProfileProperty());
             profileListPage.profilesProperty().bindContent(Profiles.profilesProperty());
+            Controllers.profileListPage = profileListPage;
         }
         return profileListPage;
     }
@@ -137,28 +147,10 @@ public final class Controllers {
 
     public static MainPage getMainPage() {
         if (mainPage == null) {
-            mainPage = new MainPage();
-            mainPage.setOnDragOver(event -> {
-                if (event.getGestureSource() != mainPage && event.getDragboard().hasFiles()) {
-                    if (event.getDragboard().getFiles().stream().anyMatch(it -> "zip".equals(FileUtils.getExtension(it))))
-                        event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
-                }
-                event.consume();
-            });
-
-            mainPage.setOnDragDropped(event -> {
-                List<File> files = event.getDragboard().getFiles();
-                if (files != null) {
-                    List<File> modpacks = files.stream()
-                            .filter(it -> "zip".equals(FileUtils.getExtension(it)))
-                            .collect(Collectors.toList());
-                    if (!modpacks.isEmpty()) {
-                        File modpack = modpacks.get(0);
-                        Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(modpack), i18n("install.modpack"));
-                        event.setDropCompleted(true);
-                    }
-                }
-                event.consume();
+            MainPage mainPage = new MainPage();
+            FXUtils.applyDragListener(mainPage, it -> "zip".equals(FileUtils.getExtension(it)), modpacks -> {
+                File modpack = modpacks.get(0);
+                Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(Profiles.getSelectedProfile(), modpack), i18n("install.modpack"));
             });
 
             FXUtils.onChangeAndOperate(Profiles.selectedVersionProperty(), version -> {
@@ -170,7 +162,7 @@ public final class Controllers {
             });
             mainPage.showUpdateProperty().bind(UpdateChecker.outdatedProperty());
             mainPage.latestVersionProperty().bind(
-                    MultiStepBinding.of(UpdateChecker.latestVersionProperty())
+                    BindingMapping.of(UpdateChecker.latestVersionProperty())
                             .map(version -> version == null ? "" : i18n("update.bubble.title", version.getVersion())));
 
             Profiles.registerVersionsListener(profile -> {
@@ -185,11 +177,12 @@ public final class Controllers {
                             return node;
                         })
                         .collect(Collectors.toList());
-                JFXUtilities.runInFX(() -> {
+                runInFX(() -> {
                     if (profile == Profiles.getSelectedProfile())
                         mainPage.getVersions().setAll(children);
                 });
             });
+            Controllers.mainPage = mainPage;
         }
         return mainPage;
     }
@@ -209,12 +202,18 @@ public final class Controllers {
         leftPaneController = new LeftPaneController();
         decorator.getDecorator().drawerProperty().setAll(leftPaneController);
 
-        Task.of(JavaVersion::initialize).start();
+        if (config().getCommonDirType() == EnumCommonDirectory.CUSTOM &&
+                !FileUtils.canCreateDirectory(config().getCommonDirectory())) {
+            config().setCommonDirType(EnumCommonDirectory.DEFAULT);
+            dialog(i18n("launcher.cache_directory.invalid"));
+        }
+
+        Task.runAsync(JavaVersion::initialize).start();
 
         scene = new Scene(decorator.getDecorator(), 800, 519);
         scene.getStylesheets().setAll(config().getTheme().getStylesheets());
 
-        stage.getIcons().add(new Image("/assets/img/icon.png"));
+        stage.getIcons().add(newImage("/assets/img/icon.png"));
         stage.setTitle(Metadata.TITLE);
     }
 
@@ -228,14 +227,14 @@ public final class Controllers {
     }
 
     public static void dialog(String text, String title) {
-        dialog(text, title, MessageBox.INFORMATION_MESSAGE);
+        dialog(text, title, MessageType.INFORMATION);
     }
 
-    public static void dialog(String text, String title, int type) {
+    public static void dialog(String text, String title, MessageType type) {
         dialog(text, title, type, null);
     }
 
-    public static void dialog(String text, String title, int type, Runnable onAccept) {
+    public static void dialog(String text, String title, MessageType type, Runnable onAccept) {
         dialog(new MessageDialogPane(text, title, type, onAccept));
     }
 
@@ -247,6 +246,10 @@ public final class Controllers {
         InputDialogPane pane = new InputDialogPane(text, onResult);
         dialog(pane);
         return pane;
+    }
+
+    public static Region taskDialog(TaskExecutor executor, String title) {
+        return taskDialog(executor, title, "");
     }
 
     public static Region taskDialog(TaskExecutor executor, String title, String subtitle) {

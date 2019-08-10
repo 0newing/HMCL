@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,16 +13,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import javafx.application.Platform;
-import javafx.beans.property.*;
-import javafx.collections.FXCollections;
-import javafx.scene.control.Control;
-import javafx.scene.control.Skin;
+import javafx.beans.property.ReadOnlyStringProperty;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.scene.Node;
 import javafx.scene.control.ToggleGroup;
 import org.jackhuang.hmcl.event.EventBus;
 import org.jackhuang.hmcl.event.RefreshingVersionsEvent;
@@ -30,31 +28,31 @@ import org.jackhuang.hmcl.game.HMCLGameRepository;
 import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.setting.Profiles;
-import org.jackhuang.hmcl.ui.Controllers;
-import org.jackhuang.hmcl.ui.WeakListenerHolder;
+import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
 import org.jackhuang.hmcl.ui.download.ModpackInstallWizardProvider;
 import org.jackhuang.hmcl.ui.download.VanillaInstallWizardProvider;
 import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.versioning.VersionNumber;
 
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
-public class GameList extends Control implements DecoratorPage {
+public class GameList extends ListPageBase<GameListItem> implements DecoratorPage {
     private final ReadOnlyStringWrapper title = new ReadOnlyStringWrapper(I18n.i18n("version.manage"));
-    private final BooleanProperty loading = new SimpleBooleanProperty(true);
-    private final ListProperty<GameListItem> items = new SimpleListProperty<>(FXCollections.observableArrayList());
 
     private ToggleGroup toggleGroup;
 
     public GameList() {
         EventBus.EVENT_BUS.channel(RefreshingVersionsEvent.class).register(event -> {
             if (event.getSource() == Profiles.getSelectedProfile().getRepository())
-                JFXUtilities.runInFX(() -> loading.set(true));
+                runInFX(() -> setLoading(true));
         });
 
         Profiles.registerVersionsListener(this::loadVersions);
@@ -67,13 +65,14 @@ public class GameList extends Control implements DecoratorPage {
         toggleGroup.getProperties().put("ReferenceHolder", listenerHolder);
         List<GameListItem> children = repository.getVersions().parallelStream()
                 .filter(version -> !version.isHidden())
-                .sorted(Comparator.comparing(Version::getReleaseTime).thenComparing(a -> VersionNumber.asVersion(a.getId())))
+                .sorted(Comparator.comparing((Version version) -> version.getReleaseTime() == null ? new Date(0L) : version.getReleaseTime())
+                        .thenComparing(a -> VersionNumber.asVersion(a.getId())))
                 .map(version -> new GameListItem(toggleGroup, profile, version.getId()))
                 .collect(Collectors.toList());
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             if (profile == Profiles.getSelectedProfile()) {
-                loading.set(false);
-                items.setAll(children);
+                setLoading(false);
+                itemsProperty().setAll(children);
                 children.forEach(GameListItem::checkSelection);
 
                 profile.selectedVersionProperty().addListener(listenerHolder.weak((a, b, newValue) -> {
@@ -95,16 +94,22 @@ public class GameList extends Control implements DecoratorPage {
     }
 
     @Override
-    protected Skin<?> createDefaultSkin() {
-        return new GameListSkin(this);
+    protected GameListSkin createDefaultSkin() {
+        return new GameListSkin();
     }
 
-    public void addNewGame() {
-        Controllers.getDecorator().startWizard(new VanillaInstallWizardProvider(), i18n("install.new_game"));
+    void addNewGame() {
+        Profile profile = Profiles.getSelectedProfile();
+        if (profile.getRepository().isLoaded()) {
+            Controllers.getDecorator().startWizard(new VanillaInstallWizardProvider(profile), i18n("install.new_game"));
+        }
     }
 
-    public void importModpack() {
-        Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(), i18n("install.modpack"));
+    void importModpack() {
+        Profile profile = Profiles.getSelectedProfile();
+        if (profile.getRepository().isLoaded()) {
+            Controllers.getDecorator().startWizard(new ModpackInstallWizardProvider(profile), i18n("install.modpack"));
+        }
     }
 
     public void refresh() {
@@ -120,11 +125,20 @@ public class GameList extends Control implements DecoratorPage {
         return title.getReadOnlyProperty();
     }
 
-    public BooleanProperty loadingProperty() {
-        return loading;
-    }
+    private class GameListSkin extends ToolbarListPageSkin<GameList> {
 
-    public ListProperty<GameListItem> itemsProperty() {
-        return items;
+        public GameListSkin() {
+            super(GameList.this);
+        }
+
+        @Override
+        protected List<Node> initializeToolbar(GameList skinnable) {
+            return Arrays.asList(
+                    createToolbarButton(i18n("install.new_game"), SVG::plus, skinnable::addNewGame),
+                    createToolbarButton(i18n("install.modpack"), SVG::importIcon, skinnable::importModpack),
+                    createToolbarButton(i18n("button.refresh"), SVG::refresh, skinnable::refresh),
+                    createToolbarButton(i18n("settings.type.global.manage"), SVG::gear, skinnable::modifyGlobalGameSettings)
+            );
+        }
     }
 }

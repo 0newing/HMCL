@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.account;
 
@@ -35,9 +35,11 @@ import org.jackhuang.hmcl.ui.construct.SpinnerPane;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 import static org.jackhuang.hmcl.ui.FXUtils.loadFXML;
+import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public class AddAuthlibInjectorServerPane extends StackPane implements DialogAware {
@@ -102,13 +104,13 @@ public class AddAuthlibInjectorServerPane extends StackPane implements DialogAwa
         nextPane.showSpinner();
         addServerPane.setDisable(true);
 
-        Task.of(() -> {
+        Task.runAsync(() -> {
             serverBeingAdded = AuthlibInjectorServer.locateServer(url);
-        }).finalized(Schedulers.javafx(), (variables, isDependentsSucceeded) -> {
+        }).whenComplete(Schedulers.javafx(), exception -> {
             addServerPane.setDisable(false);
             nextPane.hideSpinner();
 
-            if (isDependentsSucceeded) {
+            if (exception == null) {
                 lblServerName.setText(serverBeingAdded.getName());
                 lblServerUrl.setText(serverBeingAdded.getUrl());
 
@@ -116,7 +118,8 @@ public class AddAuthlibInjectorServerPane extends StackPane implements DialogAwa
 
                 transitionHandler.setContent(confirmServerPane, ContainerAnimations.SWIPE_LEFT.getAnimationProducer());
             } else {
-                lblCreationWarning.setText(resolveFetchExceptionMessage(variables.<Exception>get("lastException")));
+                LOG.log(Level.WARNING, "Failed to resolve auth server: " + url, exception);
+                lblCreationWarning.setText(resolveFetchExceptionMessage(exception));
             }
         }).start();
 

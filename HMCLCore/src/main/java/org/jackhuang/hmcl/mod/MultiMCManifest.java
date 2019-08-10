@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,20 +13,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
 import com.google.gson.annotations.SerializedName;
-
 import org.jackhuang.hmcl.util.Immutable;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
-import org.jackhuang.hmcl.util.io.CompressingUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -53,21 +49,24 @@ public final class MultiMCManifest {
         return components;
     }
 
-    public static MultiMCManifest readMultiMCModpackManifest(File zipFile) throws IOException {
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(zipFile.toPath())) {
-            Path root = Files.list(fs.getPath("/")).filter(Files::isDirectory).findAny()
-                    .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
-            Path mmcPack = root.resolve("mmc-pack.json");
-            if (Files.notExists(mmcPack))
-                return null;
-            String json = IOUtils.readFullyAsString(Files.newInputStream(mmcPack));
-            MultiMCManifest manifest = JsonUtils.fromNonNullJson(json, MultiMCManifest.class);
+    /**
+     * Read MultiMC modpack manifest from zip file
+     * @param root root path in zip file (Path root is a path of ZipFileSystem)
+     * @return the MultiMC modpack manifest.
+     * @throws IOException if zip file is malformed
+     * @throws com.google.gson.JsonParseException if manifest is malformed.
+     */
+    public static MultiMCManifest readMultiMCModpackManifest(Path root) throws IOException {
+        Path mmcPack = root.resolve("mmc-pack.json");
+        if (Files.notExists(mmcPack))
+            return null;
+        String json = IOUtils.readFullyAsString(Files.newInputStream(mmcPack));
+        MultiMCManifest manifest = JsonUtils.fromNonNullJson(json, MultiMCManifest.class);
 
-            if (manifest.getComponents() == null)
-                throw new IOException("mmc-pack.json malformed.");
+        if (manifest.getComponents() == null)
+            throw new IOException("mmc-pack.json malformed.");
 
-            return manifest;
-        }
+        return manifest;
     }
 
     public static final class MultiMCManifestCachedRequires {

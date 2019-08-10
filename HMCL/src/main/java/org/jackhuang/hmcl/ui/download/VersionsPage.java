@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,9 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.download;
+
+import static org.jackhuang.hmcl.util.Logging.LOG;
 
 import com.jfoenix.controls.JFXCheckBox;
 import com.jfoenix.controls.JFXListView;
@@ -23,6 +25,7 @@ import com.jfoenix.controls.JFXSpinner;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.fxml.FXML;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -38,9 +41,10 @@ import org.jackhuang.hmcl.ui.wizard.WizardPage;
 
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-public final class VersionsPage extends StackPane implements WizardPage, Refreshable {
+public final class VersionsPage extends BorderPane implements WizardPage, Refreshable {
     private final String gameVersion;
     private final DownloadProvider downloadProvider;
     private final String libraryId;
@@ -56,6 +60,8 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
     @FXML
     private StackPane emptyPane;
     @FXML
+    private StackPane root;
+    @FXML
     private JFXCheckBox chkRelease;
     @FXML
     private JFXCheckBox chkSnapshot;
@@ -66,7 +72,7 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
     @FXML
     private VBox centrePane;
 
-    private final TransitionHandler transitionHandler = new TransitionHandler(this);
+    private final TransitionHandler transitionHandler;
     private final VersionList<?> versionList;
     private TaskExecutor executor;
 
@@ -79,6 +85,8 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
         this.versionList = downloadProvider.getVersionListById(libraryId);
 
         FXUtils.loadFXML(this, "/assets/fxml/download/versions.fxml");
+
+        transitionHandler = new TransitionHandler(root);
 
         if (versionList.hasType()) {
             centrePane.getChildren().setAll(checkPane, list);
@@ -119,9 +127,9 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
 
     @Override
     public void refresh() {
-        getChildren().setAll(spinner);
-        executor = versionList.refreshAsync(downloadProvider).finalized((variables, isDependentsSucceeded) -> {
-            if (isDependentsSucceeded) {
+        transitionHandler.setContent(spinner, ContainerAnimations.FADE.getAnimationProducer());
+        executor = versionList.refreshAsync(gameVersion, downloadProvider).whenComplete(exception -> {
+            if (exception == null) {
                 List<VersionsPageItem> items = loadVersions();
 
                 Platform.runLater(() -> {
@@ -139,6 +147,7 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
                     }
                 });
             } else {
+                LOG.log(Level.WARNING, "Failed to fetch versions list", exception);
                 Platform.runLater(() -> {
                     transitionHandler.setContent(failedPane, ContainerAnimations.FADE.getAnimationProducer());
                 });
@@ -165,4 +174,9 @@ public final class VersionsPage extends StackPane implements WizardPage, Refresh
 
     @FXML
     private void onBack() { controller.onPrev(true); }
+
+    @FXML
+    private void onSponsor() {
+        FXUtils.openLink("https://hmcl.huangyuhui.net/api/redirect/bmclapi_sponsor");
+    }
 }

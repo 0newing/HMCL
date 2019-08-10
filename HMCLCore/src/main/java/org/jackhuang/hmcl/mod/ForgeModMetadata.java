@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.mod;
 
@@ -23,7 +23,7 @@ import com.google.gson.reflect.TypeToken;
 import org.jackhuang.hmcl.util.*;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
-import org.jackhuang.hmcl.util.io.IOUtils;
+import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -114,12 +114,12 @@ public final class ForgeModMetadata {
         return authors;
     }
 
-    public static ModInfo fromFile(File modFile) throws IOException, JsonParseException {
+    public static ModInfo fromFile(ModManager modManager, File modFile) throws IOException, JsonParseException {
         try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(modFile.toPath())) {
             Path mcmod = fs.getPath("mcmod.info");
             if (Files.notExists(mcmod))
                 throw new IOException("File " + modFile + " is not a Forge mod.");
-            List<ForgeModMetadata> modList = JsonUtils.GSON.fromJson(IOUtils.readFullyAsString(Files.newInputStream(mcmod)),
+            List<ForgeModMetadata> modList = JsonUtils.GSON.fromJson(FileUtils.readText(mcmod),
                     new TypeToken<List<ForgeModMetadata>>() {
                     }.getType());
             if (modList == null || modList.isEmpty())
@@ -132,7 +132,7 @@ public final class ForgeModMetadata {
                 authors = String.join(", ", metadata.getAuthorList());
             if (StringUtils.isBlank(authors))
                 authors = metadata.getCredits();
-            return new ModInfo(modFile, metadata.getName(), metadata.getDescription(),
+            return new ModInfo(modManager, modFile, metadata.getName(), metadata.getDescription(),
                     authors, metadata.getVersion(), metadata.getGameVersion(),
                     StringUtils.isBlank(metadata.getUrl()) ? metadata.getUpdateUrl() : metadata.url);
         }

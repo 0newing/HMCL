@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.versions;
 
@@ -34,10 +34,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
-import org.jackhuang.hmcl.setting.EnumGameDirectory;
-import org.jackhuang.hmcl.setting.Profile;
-import org.jackhuang.hmcl.setting.Profiles;
-import org.jackhuang.hmcl.setting.VersionSetting;
+import org.jackhuang.hmcl.setting.*;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
@@ -56,10 +53,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
+import static org.jackhuang.hmcl.ui.FXUtils.stringConverter;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class VersionSettingsPage extends StackPane implements DecoratorPage {
@@ -69,7 +68,6 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
     private Profile profile;
     private String versionId;
     private boolean javaItemsLoaded;
-    private InvalidationListener specificSettingsListener;
 
     @FXML private VBox rootPane;
     @FXML private ScrollPane scroll;
@@ -85,11 +83,12 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
     @FXML private ComponentList advancedSettingsPane;
     @FXML private ComponentList componentList;
     @FXML private ComponentList iconPickerItemWrapper;
-    @FXML private JFXComboBox<?> cboLauncherVisibility;
+    @FXML private JFXComboBox<LauncherVisibility> cboLauncherVisibility;
     @FXML private JFXCheckBox chkFullscreen;
     @FXML private Label lblPhysicalMemory;
     @FXML private JFXToggleButton chkNoJVMArgs;
     @FXML private JFXToggleButton chkNoGameCheck;
+    @FXML private JFXToggleButton chkNoJVMCheck;
     @FXML private MultiFileItem<JavaVersion> javaItem;
     @FXML private MultiFileItem<EnumGameDirectory> gameDirItem;
     @FXML private JFXToggleButton chkShowLogs;
@@ -97,8 +96,17 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
     @FXML private JFXCheckBox chkEnableSpecificSettings;
     @FXML private BorderPane settingsTypePane;
 
+    private InvalidationListener specificSettingsListener = any -> {
+        chkEnableSpecificSettings.setSelected(!lastVersionSetting.isUsesGlobal());
+    };
+
+    private InvalidationListener javaListener = any -> initJavaSubtitle();
+
     public VersionSettingsPage() {
         FXUtils.loadFXML(this, "/assets/fxml/version/version-settings.fxml");
+
+        cboLauncherVisibility.getItems().setAll(LauncherVisibility.values());
+        cboLauncherVisibility.setConverter(stringConverter(e -> i18n("settings.advanced.launcher_visibility." + e.name().toLowerCase())));
     }
 
     @FXML
@@ -107,15 +115,14 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
 
         FXUtils.smoothScrolling(scroll);
 
-        Task.of(variables -> variables.set("list", JavaVersion.getJavas()))
-                .subscribe(Schedulers.javafx(), variables -> {
-                    javaItem.loadChildren(
-                            (variables.<List<JavaVersion>>get("list")).stream()
-                                    .map(javaVersion -> javaItem.createChildren(javaVersion.getVersion() + i18n("settings.game.java_directory.bit", javaVersion.getPlatform().getBit()), javaVersion.getBinary().toString(), javaVersion))
-                                    .collect(Collectors.toList()));
-                    javaItemsLoaded = true;
-                    initializeSelectedJava();
-                });
+        Task.supplyAsync(JavaVersion::getJavas).thenAcceptAsync(Schedulers.javafx(), list -> {
+            javaItem.loadChildren(list.stream()
+                    .map(javaVersion -> javaItem.createChildren(javaVersion.getVersion() + i18n("settings.game.java_directory.bit",
+                            javaVersion.getPlatform().getBit()), javaVersion.getBinary().toString(), javaVersion))
+                    .collect(Collectors.toList()));
+            javaItemsLoaded = true;
+            initializeSelectedJava();
+        }).start();
 
         javaItem.setSelectedData(null);
         javaItem.setFallbackData(JavaVersion.fromCurrentEnvironment());
@@ -141,10 +148,6 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
 
             Platform.runLater(() -> loadVersion(profile, versionId));
         });
-
-        specificSettingsListener = o -> {
-            chkEnableSpecificSettings.setSelected(!lastVersionSetting.isUsesGlobal());
-        };
 
         componentList.disableProperty().bind(chkEnableSpecificSettings.selectedProperty().not());
         advancedSettingsPane.disableProperty().bind(chkEnableSpecificSettings.selectedProperty().not());
@@ -181,11 +184,14 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
             FXUtils.unbindString(txtServerIP, lastVersionSetting.serverIpProperty());
             FXUtils.unbindBoolean(chkFullscreen, lastVersionSetting.fullscreenProperty());
             FXUtils.unbindBoolean(chkNoGameCheck, lastVersionSetting.notCheckGameProperty());
+            FXUtils.unbindBoolean(chkNoJVMCheck, lastVersionSetting.notCheckJVMProperty());
             FXUtils.unbindBoolean(chkNoJVMArgs, lastVersionSetting.noJVMArgsProperty());
             FXUtils.unbindBoolean(chkShowLogs, lastVersionSetting.showLogsProperty());
             FXUtils.unbindEnum(cboLauncherVisibility);
 
             lastVersionSetting.usesGlobalProperty().removeListener(specificSettingsListener);
+            lastVersionSetting.javaDirProperty().removeListener(javaListener);
+            lastVersionSetting.javaProperty().removeListener(javaListener);
 
             gameDirItem.selectedDataProperty().unbindBidirectional(lastVersionSetting.gameDirTypeProperty());
             gameDirItem.subtitleProperty().unbind();
@@ -208,6 +214,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
         FXUtils.bindString(txtServerIP, versionSetting.serverIpProperty());
         FXUtils.bindBoolean(chkFullscreen, versionSetting.fullscreenProperty());
         FXUtils.bindBoolean(chkNoGameCheck, versionSetting.notCheckGameProperty());
+        FXUtils.bindBoolean(chkNoJVMCheck, versionSetting.notCheckJVMProperty());
         FXUtils.bindBoolean(chkNoJVMArgs, versionSetting.noJVMArgsProperty());
         FXUtils.bindBoolean(chkShowLogs, versionSetting.showLogsProperty());
         FXUtils.bindEnum(cboLauncherVisibility, versionSetting.launcherVisibilityProperty());
@@ -224,9 +231,8 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
             }
         });
 
-        versionSetting.javaDirProperty().setChangedListener(it -> initJavaSubtitle(versionSetting));
-        versionSetting.javaProperty().setChangedListener(it -> initJavaSubtitle(versionSetting));
-        initJavaSubtitle(versionSetting);
+        versionSetting.javaDirProperty().addListener(javaListener);
+        versionSetting.javaProperty().addListener(javaListener);
 
         gameDirItem.selectedDataProperty().bindBidirectional(versionSetting.gameDirTypeProperty());
         gameDirItem.subtitleProperty().bind(Bindings.createStringBinding(() -> Paths.get(profile.getRepository().getRunDirectory(versionId).getAbsolutePath()).normalize().toString(),
@@ -235,6 +241,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
         lastVersionSetting = versionSetting;
 
         initializeSelectedJava();
+        initJavaSubtitle();
 
         loadIcon();
     }
@@ -259,11 +266,14 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
         }
     }
 
-    private void initJavaSubtitle(VersionSetting versionSetting) {
-        Task.of(variables -> variables.set("java", versionSetting.getJavaVersion()))
-                .subscribe(Task.of(Schedulers.javafx(),
-                        variables -> javaItem.setSubtitle(variables.<JavaVersion>getOptional("java")
-                                .map(JavaVersion::getBinary).map(Path::toString).orElse("Invalid Java Directory"))));
+    private void initJavaSubtitle() {
+        VersionSetting versionSetting = lastVersionSetting;
+        if (versionSetting == null)
+            return;
+        Task.supplyAsync(versionSetting::getJavaVersion)
+                .thenAcceptAsync(Schedulers.javafx(), javaVersion -> javaItem.setSubtitle(Optional.ofNullable(javaVersion)
+                        .map(JavaVersion::getBinary).map(Path::toString).orElse("Invalid Java Path")))
+                .start();
     }
 
     @FXML
@@ -303,7 +313,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
 
     private void loadIcon() {
         if (versionId == null) {
-            iconPickerItem.setImage(new Image("/assets/img/grass.png"));
+            iconPickerItem.setImage(newImage("/assets/img/grass.png"));
             return;
         }
 
@@ -311,7 +321,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
         if (iconFile.exists())
             iconPickerItem.setImage(new Image("file:" + iconFile.getAbsolutePath()));
         else
-            iconPickerItem.setImage(new Image("/assets/img/grass.png"));
+            iconPickerItem.setImage(newImage("/assets/img/grass.png"));
         FXUtils.limitSize(iconPickerItem.getImageView(), 32, 32);
     }
 

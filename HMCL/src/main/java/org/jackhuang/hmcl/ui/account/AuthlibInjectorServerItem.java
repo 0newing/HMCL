@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,12 +13,14 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.account;
 
 import com.jfoenix.controls.JFXButton;
 import com.jfoenix.effects.JFXDepthManager;
+
+import javafx.beans.binding.Bindings;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
@@ -33,17 +35,17 @@ public final class AuthlibInjectorServerItem extends BorderPane {
     private final AuthlibInjectorServer server;
 
     private final Label lblServerName = new Label();
-    private final Label lblServerIp = new Label();
+    private final Label lblServerUrl = new Label();
 
     public AuthlibInjectorServerItem(AuthlibInjectorServer server, Consumer<AuthlibInjectorServerItem> deleteCallback) {
         this.server = server;
 
         lblServerName.setStyle("-fx-font-size: 15;");
-        lblServerIp.setStyle("-fx-font-size: 10;");
+        lblServerUrl.setStyle("-fx-font-size: 10;");
 
         VBox center = new VBox();
         BorderPane.setAlignment(center, Pos.CENTER);
-        center.getChildren().addAll(lblServerName, lblServerIp);
+        center.getChildren().addAll(lblServerName, lblServerUrl);
         setCenter(center);
 
         JFXButton right = new JFXButton();
@@ -55,8 +57,8 @@ public final class AuthlibInjectorServerItem extends BorderPane {
 
         setStyle("-fx-background-radius: 2; -fx-background-color: white; -fx-padding: 8;");
         JFXDepthManager.setDepth(this, 1);
-        lblServerName.setText(server.getName());
-        lblServerIp.setText(server.getUrl());
+        lblServerName.textProperty().bind(Bindings.createStringBinding(server::getName, server));
+        lblServerUrl.setText(server.getUrl());
     }
 
     public AuthlibInjectorServer getServer() {

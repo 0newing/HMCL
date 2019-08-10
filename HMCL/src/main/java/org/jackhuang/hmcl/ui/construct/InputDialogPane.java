@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.construct;
 
@@ -38,15 +38,20 @@ public class InputDialogPane extends StackPane {
     private Label content;
     @FXML
     private Label lblCreationWarning;
+    @FXML
+    private SpinnerPane acceptPane;
 
     public InputDialogPane(String text, FutureCallback<String> onResult) {
         FXUtils.loadFXML(this, "/assets/fxml/input-dialog.fxml");
         content.setText(text);
         cancelButton.setOnMouseClicked(e -> fireEvent(new DialogCloseEvent()));
         acceptButton.setOnMouseClicked(e -> {
+            acceptPane.showSpinner();
             onResult.call(textField.getText(), () -> {
+                acceptPane.hideSpinner();
                 fireEvent(new DialogCloseEvent());
             }, msg -> {
+                acceptPane.hideSpinner();
                 lblCreationWarning.setText(msg);
             });
         });

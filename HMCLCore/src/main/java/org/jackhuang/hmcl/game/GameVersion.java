@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,11 +13,17 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.game;
 
+import static org.jackhuang.hmcl.util.Logging.LOG;
+
+import com.google.gson.JsonParseException;
+import com.google.gson.annotations.SerializedName;
+import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
+import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jenkinsci.constant_pool_scanner.ConstantPool;
 import org.jenkinsci.constant_pool_scanner.ConstantPoolScanner;
 import org.jenkinsci.constant_pool_scanner.ConstantType;
@@ -30,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -37,6 +44,16 @@ import java.util.stream.StreamSupport;
  * @author huangyuhui
  */
 public final class GameVersion {
+    private static Optional<String> getVersionFromJson(Path versionJson) {
+        try {
+            MinecraftVersion version = JsonUtils.fromNonNullJson(FileUtils.readText(versionJson), MinecraftVersion.class);
+            return Optional.ofNullable(version.name);
+        } catch (IOException | JsonParseException e) {
+            LOG.log(Level.WARNING, "Failed to parse version.json", e);
+            return Optional.empty();
+        }
+    }
+
     private static Optional<String> getVersionOfClassMinecraft(byte[] bytecode) throws IOException {
         ConstantPool pool = ConstantPoolScanner.parse(bytecode, ConstantType.STRING);
 
@@ -74,6 +91,13 @@ public final class GameVersion {
             return Optional.empty();
 
         try (FileSystem gameJar = CompressingUtils.createReadOnlyZipFileSystem(file.toPath())) {
+            Path versionJson = gameJar.getPath("version.json");
+            if (Files.exists(versionJson)) {
+                Optional<String> result = getVersionFromJson(versionJson);
+                if (result.isPresent())
+                    return result;
+            }
+
             Path minecraft = gameJar.getPath("net/minecraft/client/Minecraft.class");
             if (Files.exists(minecraft)) {
                 Optional<String> result = getVersionOfClassMinecraft(Files.readAllBytes(minecraft));
@@ -87,5 +111,25 @@ public final class GameVersion {
         } catch (IOException e) {
             return Optional.empty();
         }
+    }
+
+    private static final class MinecraftVersion {
+        public String name;
+
+        @SerializedName("release_target")
+        public String releaseTarget;
+
+        public String id;
+
+        public boolean stable;
+
+        @SerializedName("world_version")
+        public int worldVersion;
+
+        @SerializedName("protocol_version")
+        public int protocolVersion;
+
+        @SerializedName("pack_version")
+        public int packVersion;
     }
 }

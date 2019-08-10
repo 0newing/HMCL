@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,22 +13,22 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui.account;
 
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
-import javafx.scene.image.Image;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.offline.OfflineAccount;
 import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilAccount;
-import org.jackhuang.hmcl.game.AccountHelper;
+import org.jackhuang.hmcl.game.TexturesLoader;
 import org.jackhuang.hmcl.setting.Theme;
-import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.construct.AdvancedListItem;
 
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public class AccountAdvancedListItem extends AdvancedListItem {
@@ -38,23 +38,15 @@ public class AccountAdvancedListItem extends AdvancedListItem {
         protected void invalidated() {
             Account account = get();
             if (account == null) {
+                titleProperty().unbind();
                 setTitle(i18n("account.missing"));
                 setSubtitle(i18n("account.missing.add"));
-                setImage(new Image("/assets/img/craft_table.png"));
+                imageProperty().unbind();
+                setImage(newImage("/assets/img/craft_table.png"));
             } else {
-                setTitle(account.getCharacter());
+                titleProperty().bind(Bindings.createStringBinding(account::getCharacter, account));
                 setSubtitle(accountSubtitle(account));
-
-                final int scaleRatio = 4;
-                Image defaultSkin = AccountHelper.getDefaultSkin(account.getUUID(), scaleRatio);
-                setImage(AccountHelper.getHead(defaultSkin, scaleRatio));
-
-                if (account instanceof YggdrasilAccount) {
-                    AccountHelper.loadSkinAsync((YggdrasilAccount) account).subscribe(Schedulers.javafx(), () -> {
-                        Image image = AccountHelper.getSkin((YggdrasilAccount) account, scaleRatio);
-                        setImage(AccountHelper.getHead(image, scaleRatio));
-                    });
-                }
+                imageProperty().bind(TexturesLoader.fxAvatarBinding(account, 32));
             }
         }
     };

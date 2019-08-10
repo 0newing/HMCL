@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,11 +13,12 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.game;
 
 import javafx.application.Platform;
+import javafx.stage.Stage;
 import org.jackhuang.hmcl.Launcher;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.AuthInfo;
@@ -30,7 +31,6 @@ import org.jackhuang.hmcl.launch.*;
 import org.jackhuang.hmcl.mod.CurseCompletionException;
 import org.jackhuang.hmcl.mod.CurseCompletionTask;
 import org.jackhuang.hmcl.mod.ModpackConfiguration;
-import org.jackhuang.hmcl.setting.Accounts;
 import org.jackhuang.hmcl.setting.LauncherVisibility;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.setting.VersionSetting;
@@ -39,7 +39,7 @@ import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.DialogController;
 import org.jackhuang.hmcl.ui.LogWindow;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
-import org.jackhuang.hmcl.ui.construct.MessageBox;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
 import org.jackhuang.hmcl.util.Log4jLevel;
 import org.jackhuang.hmcl.util.Logging;
@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 import static org.jackhuang.hmcl.util.Lang.mapOf;
+import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.Pair.pair;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -102,7 +103,7 @@ public final class LauncherHelper {
             try {
                 checkGameState(profile, setting, version, () -> {
                     Controllers.dialog(launchingStepsPane);
-                    Schedulers.newThread().schedule(this::launch0);
+                    Schedulers.newThread().execute(this::launch0);
                 });
             } catch (InterruptedException ignore) {
             }
@@ -121,15 +122,15 @@ public final class LauncherHelper {
         Version version = MaintainTask.maintain(repository.getResolvedVersion(selectedVersion));
         Optional<String> gameVersion = GameVersion.minecraftVersion(repository.getVersionJar(version));
 
-        TaskExecutor executor = Task.of(Schedulers.javafx(), () -> emitStatus(LoadingState.DEPENDENCIES))
-                .then(variables -> {
+        TaskExecutor executor = Task.runAsync(Schedulers.javafx(), () -> emitStatus(LoadingState.DEPENDENCIES))
+                .thenComposeAsync(() -> {
                     if (setting.isNotCheckGame())
                         return null;
                     else
                         return dependencyManager.checkGameCompletionAsync(version);
                 })
-                .then(Task.of(Schedulers.javafx(), () -> emitStatus(LoadingState.MODS)))
-                .then(var -> {
+                .thenRunAsync(Schedulers.javafx(), () -> emitStatus(LoadingState.MODS))
+                .thenComposeAsync(() -> {
                     try {
                         ModpackConfiguration<?> configuration = ModpackHelper.readModpackConfiguration(repository.getModpackConfiguration(selectedVersion));
                         if ("Curse".equals(configuration.getType()))
@@ -140,43 +141,43 @@ public final class LauncherHelper {
                         return null;
                     }
                 })
-                .then(Task.of(Schedulers.javafx(), () -> emitStatus(LoadingState.LOGGING_IN)))
-                .then(Task.of(i18n("account.methods"), variables -> {
+                .thenRunAsync(Schedulers.javafx(), () -> emitStatus(LoadingState.LOGGING_IN))
+                .thenSupplyAsync(i18n("account.methods"), () -> {
                     try {
-                        variables.set("account", account.logIn());
+                        return account.logIn();
                     } catch (CredentialExpiredException e) {
-                        variables.set("account", DialogController.logIn(account));
+                        LOG.info("Credential has expired: " + e);
+                        return DialogController.logIn(account);
                     } catch (AuthenticationException e) {
-                        variables.set("account",
-                                account.playOffline().orElseThrow(() -> e));
+                        LOG.warning("Authentication failed, try playing offline: " + e);
+                        return account.playOffline().orElseThrow(() -> e);
                     }
-                }))
-                .then(Task.of(Schedulers.javafx(), () -> emitStatus(LoadingState.LAUNCHING)))
-                .then(Task.of(variables -> {
-                    variables.set("launcher", new HMCLGameLauncher(
-                            repository,
-                            selectedVersion,
-                            variables.get("account"),
-                            setting.toLaunchOptions(profile.getGameDir()),
-                            launcherVisibility == LauncherVisibility.CLOSE
-                                    ? null // Unnecessary to start listening to game process output when close launcher immediately after game launched.
-                                    : new HMCLProcessListener(variables.get("account"), setting, gameVersion.isPresent())
-                    ));
-                }))
-                .then(variables -> {
-                    DefaultLauncher launcher = variables.get("launcher");
+                })
+                .thenApplyAsync(Schedulers.javafx(), authInfo -> {
+                    emitStatus(LoadingState.LAUNCHING);
+                    return authInfo;
+                })
+                .thenApplyAsync(authInfo -> new HMCLGameLauncher(
+                        repository,
+                        selectedVersion,
+                        authInfo,
+                        setting.toLaunchOptions(profile.getGameDir()),
+                        launcherVisibility == LauncherVisibility.CLOSE
+                                ? null // Unnecessary to start listening to game process output when close launcher immediately after game launched.
+                                : new HMCLProcessListener(authInfo, gameVersion.isPresent())
+                ))
+                .thenComposeAsync(launcher -> { // launcher is prev task's result
                     if (scriptFile == null) {
                         return new LaunchTask<>(launcher::launch).setName(i18n("version.launch"));
                     } else {
-                        return new LaunchTask<>(() -> {
+                        return new LaunchTask<ManagedProcess>(() -> {
                             launcher.makeLaunchScript(scriptFile);
                             return null;
                         }).setName(i18n("version.launch_script"));
                     }
                 })
-                .then(Task.of(variables -> {
+                .thenAcceptAsync(process -> { // process is LaunchTask's result
                     if (scriptFile == null) {
-                        ManagedProcess process = variables.get(LaunchTask.LAUNCH_ID);
                         PROCESSES.add(process);
                         if (launcherVisibility == LauncherVisibility.CLOSE)
                             Launcher.stopApplication();
@@ -185,21 +186,21 @@ public final class LauncherHelper {
                                 process.stop();
                                 it.fireEvent(new DialogCloseEvent());
                             });
-                    } else
+                    } else {
                         Platform.runLater(() -> {
                             launchingStepsPane.fireEvent(new DialogCloseEvent());
                             Controllers.dialog(i18n("version.launch_script.success", scriptFile.getAbsolutePath()));
                         });
-
-                }))
+                    }
+                })
                 .executor();
 
-        launchingStepsPane.setExecutor(executor);
+        launchingStepsPane.setExecutor(executor, false);
         executor.addTaskListener(new TaskListener() {
             final AtomicInteger finished = new AtomicInteger(0);
 
             @Override
-            public void onFinished(Task task) {
+            public void onFinished(Task<?> task) {
                 finished.incrementAndGet();
                 int runningTasks = executor.getRunningTasks();
                 Platform.runLater(() -> launchingStepsPane.setProgress(1.0 * finished.get() / runningTasks));
@@ -213,7 +214,7 @@ public final class LauncherHelper {
                         // because onStop will be invoked if tasks fail when the executor service shut down.
                         if (!Controllers.isStopped()) {
                             launchingStepsPane.fireEvent(new DialogCloseEvent());
-                            Exception ex = executor.getLastException();
+                            Exception ex = executor.getException();
                             if (ex != null) {
                                 String message;
                                 if (ex instanceof CurseCompletionException) {
@@ -234,7 +235,7 @@ public final class LauncherHelper {
                                 }
                                 Controllers.dialog(message,
                                         scriptFile == null ? i18n("launch.failed") : i18n("version.launch_script.failed"),
-                                        MessageBox.ERROR_MESSAGE);
+                                        MessageType.ERROR);
                             }
                         }
                     });
@@ -247,6 +248,11 @@ public final class LauncherHelper {
     }
 
     private static void checkGameState(Profile profile, VersionSetting setting, Version version, Runnable onAccept) throws InterruptedException {
+        if (setting.isNotCheckJVM()) {
+            onAccept.run();
+            return;
+        }
+
         boolean flag = false;
         boolean java8required = false;
         boolean newJavaRequired = false;
@@ -256,7 +262,7 @@ public final class LauncherHelper {
         VersionNumber gameVersion = VersionNumber.asVersion(GameVersion.minecraftVersion(profile.getRepository().getVersionJar(version)).orElse("Unknown"));
         JavaVersion java = setting.getJavaVersion();
         if (java == null) {
-            Controllers.dialog(i18n("launch.wrong_javadir"), i18n("message.warning"), MessageBox.WARNING_MESSAGE, onAccept);
+            Controllers.dialog(i18n("launch.wrong_javadir"), i18n("message.warning"), MessageType.WARNING, onAccept);
             setting.setJava(null);
             setting.setDefaultJavaPath(null);
             java = JavaVersion.fromCurrentEnvironment();
@@ -275,10 +281,10 @@ public final class LauncherHelper {
                 if (gameVersion.compareTo(VersionNumber.asVersion("1.13")) >= 0) {
                     // Minecraft 1.13 and later versions only support Java 8 or later.
                     // Terminate launching operation.
-                    Controllers.dialog(i18n("launch.advice.java8_1_13"), i18n("message.error"), MessageBox.ERROR_MESSAGE, null);
+                    Controllers.dialog(i18n("launch.advice.java8_1_13"), i18n("message.error"), MessageType.ERROR, null);
                 } else {
                     // Most mods require Java 8 or later version.
-                    Controllers.dialog(i18n("launch.advice.newer_java"), i18n("message.warning"), MessageBox.WARNING_MESSAGE, onAccept);
+                    Controllers.dialog(i18n("launch.advice.newer_java"), i18n("message.warning"), MessageType.WARNING, onAccept);
                 }
                 flag = true;
             }
@@ -294,8 +300,10 @@ public final class LauncherHelper {
             if (java8.isPresent()) {
                 java8required = true;
                 setting.setJavaVersion(java8.get());
+                Controllers.dialog(i18n("launch.advice.java9") + "\n" + i18n("launch.advice.corrected"), i18n("message.info"), MessageType.INFORMATION, onAccept);
+                flag = true;
             } else {
-                Controllers.dialog(i18n("launch.advice.java9"), i18n("message.error"), MessageBox.ERROR_MESSAGE, null);
+                Controllers.dialog(i18n("launch.advice.java9") + "\n" + i18n("launch.advice.uncorrected"), i18n("message.error"), MessageType.ERROR, null);
                 flag = true;
             }
         }
@@ -310,7 +318,7 @@ public final class LauncherHelper {
                 newJavaRequired = true;
                 setting.setJavaVersion(java8.get());
             } else {
-                Controllers.dialog(i18n("launch.advice.java8_51_1_13"), i18n("message.warning"), MessageBox.WARNING_MESSAGE, onAccept);
+                Controllers.dialog(i18n("launch.advice.java8_51_1_13"), i18n("message.warning"), MessageType.WARNING, onAccept);
                 flag = true;
             }
         }
@@ -342,7 +350,7 @@ public final class LauncherHelper {
             if (java64.isPresent()) {
                 setting.setJavaVersion(java64.get());
             } else {
-                Controllers.dialog(i18n("launch.advice.different_platform"), i18n("message.error"), MessageBox.ERROR_MESSAGE, onAccept);
+                Controllers.dialog(i18n("launch.advice.different_platform"), i18n("message.error"), MessageType.ERROR, onAccept);
                 flag = true;
             }
         }
@@ -352,23 +360,25 @@ public final class LauncherHelper {
                 setting.getMaxMemory() > 1.5 * 1024) {
             // 1.5 * 1024 is an inaccurate number.
             // Actual memory limit depends on operating system and memory.
-            Controllers.dialog(i18n("launch.advice.too_large_memory_for_32bit"), i18n("message.error"), MessageBox.ERROR_MESSAGE, onAccept);
+            Controllers.dialog(i18n("launch.advice.too_large_memory_for_32bit"), i18n("message.error"), MessageType.ERROR, onAccept);
             flag = true;
         }
 
         // Cannot allocate too much memory exceeding free space.
         if (!flag && OperatingSystem.TOTAL_MEMORY > 0 && OperatingSystem.TOTAL_MEMORY < setting.getMaxMemory()) {
-            Controllers.dialog(i18n("launch.advice.not_enough_space", OperatingSystem.TOTAL_MEMORY), i18n("message.error"), MessageBox.ERROR_MESSAGE, onAccept);
+            Controllers.dialog(i18n("launch.advice.not_enough_space", OperatingSystem.TOTAL_MEMORY), i18n("message.error"), MessageType.ERROR, onAccept);
             flag = true;
         }
 
-        // Forge 2760 and above will crash game with LiteLoader.
+        // Forge 2760~2773 will crash game with LiteLoader.
         if (!flag) {
             boolean hasForge2760 = version.getLibraries().stream().filter(it -> it.is("net.minecraftforge", "forge"))
-                    .anyMatch(it -> VersionNumber.VERSION_COMPARATOR.compare(it.getVersion(), "1.12.2-14.23.5.2760") >= 0);
+                    .anyMatch(it ->
+                            VersionNumber.VERSION_COMPARATOR.compare("1.12.2-14.23.5.2760", it.getVersion()) <= 0 &&
+                                    VersionNumber.VERSION_COMPARATOR.compare(it.getVersion(), "1.12.2-14.23.5.2773") < 0);
             boolean hasLiteLoader = version.getLibraries().stream().anyMatch(it -> it.is("com.mumfrey", "liteloader"));
             if (hasForge2760 && hasLiteLoader && gameVersion.compareTo(VersionNumber.asVersion("1.12.2")) == 0) {
-                Controllers.dialog(i18n("launch.advice.forge2760_liteloader"), i18n("message.error"), MessageBox.ERROR_MESSAGE, onAccept);
+                Controllers.dialog(i18n("launch.advice.forge2760_liteloader"), i18n("message.error"), MessageType.ERROR, onAccept);
                 flag = true;
             }
         }
@@ -389,7 +399,10 @@ public final class LauncherHelper {
     private void checkExit() {
         switch (launcherVisibility) {
             case HIDE_AND_REOPEN:
-                Platform.runLater(Controllers.getStage()::show);
+                Platform.runLater(() -> {
+                    Optional.ofNullable(Controllers.getStage())
+                            .ifPresent(Stage::show);
+                });
                 break;
             case KEEP:
                 // No operations here
@@ -407,7 +420,7 @@ public final class LauncherHelper {
         }
     }
 
-    private static class LaunchTask<T> extends TaskResult<T> {
+    private static class LaunchTask<T> extends Task<T> {
         private final ExceptionalSupplier<T, Exception> supplier;
 
         public LaunchTask(ExceptionalSupplier<T, Exception> supplier) {
@@ -418,13 +431,6 @@ public final class LauncherHelper {
         public void execute() throws Exception {
             setResult(supplier.get());
         }
-
-        @Override
-        public String getId() {
-            return LAUNCH_ID;
-        }
-
-        static final String LAUNCH_ID = "launch";
     }
 
     /**
@@ -434,7 +440,6 @@ public final class LauncherHelper {
      */
     class HMCLProcessListener implements ProcessListener {
 
-        private final VersionSetting setting;
         private final Map<String, String> forbiddenTokens;
         private ManagedProcess process;
         private boolean lwjgl;
@@ -443,8 +448,7 @@ public final class LauncherHelper {
         private final LinkedList<Pair<String, Log4jLevel>> logs;
         private final CountDownLatch latch = new CountDownLatch(1);
 
-        public HMCLProcessListener(AuthInfo authInfo, VersionSetting setting, boolean detectWindow) {
-            this.setting = setting;
+        public HMCLProcessListener(AuthInfo authInfo, boolean detectWindow) {
             this.detectWindow = detectWindow;
 
             if (authInfo == null)

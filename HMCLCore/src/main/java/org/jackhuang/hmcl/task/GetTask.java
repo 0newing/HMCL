@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.task;
 
@@ -29,7 +29,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Level;
 
@@ -37,45 +36,30 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  *
- * @author huang
+ * @author huangyuhui
  */
-public final class GetTask extends TaskResult<String> {
+public final class GetTask extends Task<String> {
 
     private final URL url;
     private final Charset charset;
     private final int retry;
-    private final String id;
     private CacheRepository repository = CacheRepository.getInstance();
 
     public GetTask(URL url) {
-        this(url, ID);
+        this(url, UTF_8);
     }
 
-    public GetTask(URL url, String id) {
-        this(url, id, UTF_8);
+    public GetTask(URL url, Charset charset) {
+        this(url, charset, 5);
     }
 
-    public GetTask(URL url, String id, Charset charset) {
-        this(url, id, charset, 5);
-    }
-
-    public GetTask(URL url, String id, Charset charset, int retry) {
+    public GetTask(URL url, Charset charset, int retry) {
         this.url = url;
         this.charset = charset;
         this.retry = retry;
-        this.id = id;
 
         setName(url.toString());
-    }
-
-    @Override
-    public Scheduler getScheduler() {
-        return Schedulers.io();
-    }
-
-    @Override
-    public String getId() {
-        return id;
+        setExecutor(Schedulers.io());
     }
 
     public GetTask setCacheRepository(CacheRepository repository) {
@@ -127,7 +111,7 @@ public final class GetTask extends TaskResult<String> {
                 }
 
                 if (size > 0 && size != read)
-                    throw new IllegalStateException("Not completed! Readed: " + read + ", total size: " + size);
+                    throw new IOException("Not completed! Readed: " + read + ", total size: " + size);
 
                 String result = baos.toString(charset.name());
                 setResult(result);
@@ -141,12 +125,7 @@ public final class GetTask extends TaskResult<String> {
             }
         }
         if (exception != null)
-            throw exception;
+            throw new DownloadException(url, exception);
     }
-
-    /**
-     * The default task result ID.
-     */
-    public static final String ID = "http_get";
 
 }

@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.setting;
 
@@ -40,36 +40,37 @@ import org.jackhuang.hmcl.util.gson.FileTypeAdapter;
 import org.jackhuang.hmcl.util.i18n.Locales;
 import org.jackhuang.hmcl.util.i18n.Locales.SupportedLocale;
 import org.jackhuang.hmcl.util.javafx.ObservableHelper;
+import org.jackhuang.hmcl.util.javafx.PropertyUtils;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
-import java.lang.reflect.Modifier;
 import java.net.Proxy;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.stream.Stream;
 
 public final class Config implements Cloneable, Observable {
 
+    public static final int CURRENT_UI_VERSION = 0;
+
     private static final Gson CONFIG_GSON = new GsonBuilder()
-            .registerTypeAdapter(VersionSetting.class, VersionSetting.Serializer.INSTANCE)
-            .registerTypeAdapter(Profile.class, Profile.Serializer.INSTANCE)
             .registerTypeAdapter(File.class, FileTypeAdapter.INSTANCE)
             .registerTypeAdapter(ObservableList.class, new ObservableListCreator())
             .registerTypeAdapter(ObservableSet.class, new ObservableSetCreator())
             .registerTypeAdapter(ObservableMap.class, new ObservableMapCreator())
             .registerTypeAdapterFactory(new JavaFxPropertyTypeAdapterFactory(true, true))
-            .registerTypeAdapter(Theme.class, new Theme.TypeAdapter())
-            .registerTypeAdapter(SupportedLocale.class, new SupportedLocale.TypeAdapter())
             .registerTypeAdapter(EnumBackgroundImage.class, new EnumOrdinalDeserializer<>(EnumBackgroundImage.class)) // backward compatibility for backgroundType
             .registerTypeAdapter(Proxy.Type.class, new EnumOrdinalDeserializer<>(Proxy.Type.class)) // backward compatibility for hasProxy
             .setPrettyPrinting()
             .create();
 
+    @Nullable
     public static Config fromJson(String json) throws JsonParseException {
-        Config instance = CONFIG_GSON.fromJson(json, Config.class);
-        // Gson will replace the property fields (even they are final!)
-        // So we have to add the listeners again after deserialization
-        instance.addListenerToProperties();
+        Config loaded = CONFIG_GSON.fromJson(json, Config.class);
+        if (loaded == null) {
+            return null;
+        }
+        Config instance = new Config();
+        PropertyUtils.copyProperties(loaded, instance);
         return instance;
     }
 
@@ -101,7 +102,7 @@ public final class Config implements Cloneable, Observable {
     private StringProperty proxyHost = new SimpleStringProperty();
 
     @SerializedName("proxyPort")
-    private StringProperty proxyPort = new SimpleStringProperty();
+    private IntegerProperty proxyPort = new SimpleIntegerProperty();
 
     @SerializedName("proxyUserName")
     private StringProperty proxyUser = new SimpleStringProperty();
@@ -124,9 +125,6 @@ public final class Config implements Cloneable, Observable {
     @SerializedName("accounts")
     private ObservableList<Map<Object, Object>> accountStorages = FXCollections.observableArrayList();
 
-    @SerializedName("selectedAccount")
-    private StringProperty selectedAccount = new SimpleStringProperty("");
-
     @SerializedName("fontFamily")
     private StringProperty fontFamily = new SimpleStringProperty("Consolas");
 
@@ -137,7 +135,7 @@ public final class Config implements Cloneable, Observable {
     private IntegerProperty logLines = new SimpleIntegerProperty(100);
 
     @SerializedName("authlibInjectorServers")
-    private ObservableList<AuthlibInjectorServer> authlibInjectorServers = FXCollections.observableArrayList();
+    private ObservableList<AuthlibInjectorServer> authlibInjectorServers = FXCollections.observableArrayList(server -> new Observable[] { server });
 
     @SerializedName("updateChannel")
     private ObjectProperty<UpdateChannel> updateChannel = new SimpleObjectProperty<>(UpdateChannel.STABLE);
@@ -145,30 +143,26 @@ public final class Config implements Cloneable, Observable {
     @SerializedName("_version")
     private IntegerProperty configVersion = new SimpleIntegerProperty(0);
 
+    /**
+     * The version of UI that the user have last used.
+     * If there is a major change in UI, {@link Config#CURRENT_UI_VERSION} should be increased.
+     * When {@link #CURRENT_UI_VERSION} is higher than the property, the user guide should be shown,
+     * then this property is set to the same value as {@link #CURRENT_UI_VERSION}.
+     * In particular, the property is default to 0, so that whoever open the application for the first time will see the guide.
+     */
     @SerializedName("uiVersion")
     private IntegerProperty uiVersion = new SimpleIntegerProperty(0);
+
+    /**
+     * The preferred login type to use when the user wants to add an account.
+     */
+    @SerializedName("preferredLoginType")
+    private StringProperty preferredLoginType = new SimpleStringProperty();
 
     private transient ObservableHelper helper = new ObservableHelper(this);
 
     public Config() {
-        addListenerToProperties();
-    }
-
-    private void addListenerToProperties() {
-        Stream.of(getClass().getDeclaredFields())
-                .filter(it -> {
-                    int modifiers = it.getModifiers();
-                    return !Modifier.isTransient(modifiers) && !Modifier.isStatic(modifiers);
-                })
-                .filter(it -> Observable.class.isAssignableFrom(it.getType()))
-                .map(it -> {
-                    try {
-                        return (Observable) it.get(this);
-                    } catch (IllegalAccessException e) {
-                        throw new IllegalStateException("Failed to get my own properties");
-                    }
-                })
-                .forEach(helper::receiveUpdatesFrom);
+        PropertyUtils.attachListener(this, helper);
     }
 
     @Override
@@ -299,15 +293,15 @@ public final class Config implements Cloneable, Observable {
         return proxyHost;
     }
 
-    public String getProxyPort() {
+    public int getProxyPort() {
         return proxyPort.get();
     }
 
-    public void setProxyPort(String proxyPort) {
+    public void setProxyPort(int proxyPort) {
         this.proxyPort.set(proxyPort);
     }
 
-    public StringProperty proxyPortProperty() {
+    public IntegerProperty proxyPortProperty() {
         return proxyPort;
     }
 
@@ -377,18 +371,6 @@ public final class Config implements Cloneable, Observable {
 
     public ObservableList<Map<Object, Object>> getAccountStorages() {
         return accountStorages;
-    }
-
-    public String getSelectedAccount() {
-        return selectedAccount.get();
-    }
-
-    public void setSelectedAccount(String selectedAccount) {
-        this.selectedAccount.set(selectedAccount);
-    }
-
-    public StringProperty selectedAccountProperty() {
-        return selectedAccount;
     }
 
     public String getFontFamily() {
@@ -465,5 +447,17 @@ public final class Config implements Cloneable, Observable {
 
     public void setUiVersion(int uiVersion) {
         this.uiVersion.set(uiVersion);
+    }
+
+    public String getPreferredLoginType() {
+        return preferredLoginType.get();
+    }
+
+    public void setPreferredLoginType(String preferredLoginType) {
+        this.preferredLoginType.set(preferredLoginType);
+    }
+
+    public StringProperty preferredLoginTypeProperty() {
+        return preferredLoginType;
     }
 }

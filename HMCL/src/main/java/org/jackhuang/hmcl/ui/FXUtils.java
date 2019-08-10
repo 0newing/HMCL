@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,11 +13,10 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import com.jfoenix.controls.*;
 import javafx.animation.Animation;
 import javafx.animation.Interpolator;
@@ -31,30 +30,37 @@ import javafx.beans.value.ObservableValue;
 import javafx.beans.value.WeakChangeListener;
 import javafx.event.EventHandler;
 import javafx.fxml.FXMLLoader;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Callback;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
-import org.jackhuang.hmcl.util.*;
+import org.jackhuang.hmcl.util.Logging;
+import org.jackhuang.hmcl.util.ResourceNotFoundError;
 import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.javafx.ExtendedProperties;
+import org.jackhuang.hmcl.util.javafx.SafeStringConverter;
 import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
@@ -62,12 +68,21 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import static org.jackhuang.hmcl.util.Lang.thread;
 import static org.jackhuang.hmcl.util.Lang.tryCast;
 
 public final class FXUtils {
     private FXUtils() {
+    }
+
+    public static void runInFX(Runnable runnable) {
+        if (Platform.isFxApplicationThread()) {
+            runnable.run();
+        } else {
+            Platform.runLater(runnable);
+        }
     }
 
     public static void checkFxUserThread() {
@@ -147,6 +162,20 @@ public final class FXUtils {
                     info.unbind();
                     node.getProperties().remove(key);
                 });
+    }
+
+    public static <K, T> void setupCellValueFactory(JFXTreeTableColumn<K, T> column, Function<K, ObservableValue<T>> mapper) {
+        column.setCellValueFactory(param -> {
+            if (column.validateValue(param))
+                return mapper.apply(param.getValue().getValue());
+            else
+                return column.getComputedValue(param);
+        });
+    }
+
+    public static Node wrapMargin(Node node, Insets insets) {
+        StackPane.setMargin(node, insets);
+        return new StackPane(node);
     }
 
     public static void setValidateWhileTextChanged(Node field, boolean validate) {
@@ -230,12 +259,24 @@ public final class FXUtils {
         }
     }
 
-    public static void installTooltip(Node node, String tooltip) {
-        installTooltip(node, 0, 5000, 0, new Tooltip(tooltip));
+    public static void installFastTooltip(Node node, Tooltip tooltip) {
+        installTooltip(node, 50, 5000, 0, tooltip);
+    }
+
+    public static void installFastTooltip(Node node, String tooltip) {
+        installFastTooltip(node, new Tooltip(tooltip));
+    }
+
+    public static void installSlowTooltip(Node node, Tooltip tooltip) {
+        installTooltip(node, 500, 5000, 0, tooltip);
+    }
+
+    public static void installSlowTooltip(Node node, String tooltip) {
+        installSlowTooltip(node, new Tooltip(tooltip));
     }
 
     public static void installTooltip(Node node, double openDelay, double visibleDelay, double closeDelay, Tooltip tooltip) {
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             try {
                 // Java 8
                 Class<?> behaviorClass = Class.forName("javafx.scene.control.Tooltip$TooltipBehavior");
@@ -315,7 +356,7 @@ public final class FXUtils {
     }
 
     public static void bindInt(JFXTextField textField, Property<Number> property) {
-        textField.textProperty().bindBidirectional(property, SafeIntStringConverter.INSTANCE);
+        textField.textProperty().bindBidirectional(property, SafeStringConverter.fromInteger());
     }
 
     public static void unbindInt(JFXTextField textField, Property<Number> property) {
@@ -356,7 +397,7 @@ public final class FXUtils {
      */
     @SuppressWarnings("unchecked")
     @Deprecated
-    public static void bindEnum(JFXComboBox<?> comboBox, Property<? extends Enum> property) {
+    public static void bindEnum(JFXComboBox<?> comboBox, Property<? extends Enum<?>> property) {
         unbindEnum(comboBox);
         ChangeListener<Number> listener = (a, b, newValue) ->
                 ((Property) property).setValue(property.getValue().getClass().getEnumConstants()[newValue.intValue()]);
@@ -445,6 +486,49 @@ public final class FXUtils {
         }
     }
 
+    /**
+     * Suppress IllegalArgumentException since the url is supposed to be correct definitely.
+     * @param url the url of image. The image resource should be a file within the jar.
+     * @return the image resource within the jar.
+     * @see org.jackhuang.hmcl.util.CrashReporter
+     * @see ResourceNotFoundError
+     */
+    public static Image newImage(String url) {
+        try {
+            return new Image(url);
+        } catch (IllegalArgumentException e) {
+            throw new ResourceNotFoundError("Cannot access image: " + url, e);
+        }
+    }
+
+    public static void applyDragListener(Node node, FileFilter filter, Consumer<List<File>> callback) {
+        applyDragListener(node, filter, callback, null);
+    }
+
+    public static void applyDragListener(Node node, FileFilter filter, Consumer<List<File>> callback, Runnable dragDropped) {
+        node.setOnDragOver(event -> {
+            if (event.getGestureSource() != node && event.getDragboard().hasFiles()) {
+                if (event.getDragboard().getFiles().stream().anyMatch(filter::accept))
+                    event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+            }
+            event.consume();
+        });
+
+        node.setOnDragDropped(event -> {
+            List<File> files = event.getDragboard().getFiles();
+            if (files != null) {
+                List<File> acceptFiles = files.stream().filter(filter::accept).collect(Collectors.toList());
+                if (!acceptFiles.isEmpty()) {
+                    callback.accept(acceptFiles);
+                    event.setDropCompleted(true);
+                }
+            }
+            if (dragDropped != null)
+                dragDropped.run();
+            event.consume();
+        });
+    }
+
     public static <T> StringConverter<T> stringConverter(Function<T, String> func) {
         return new StringConverter<T>() {
 
@@ -466,6 +550,7 @@ public final class FXUtils {
             public void updateItem(T item, boolean empty) {
                 super.updateItem(item, empty);
                 if (!empty) {
+                    setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
                     setGraphic(graphicBuilder.apply(item));
                 }
             }

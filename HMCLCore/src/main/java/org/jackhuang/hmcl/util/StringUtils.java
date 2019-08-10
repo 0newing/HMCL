@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,9 +13,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.util;
+
+import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -23,8 +25,6 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.StringTokenizer;
-
-import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 /**
  *
@@ -128,6 +128,10 @@ public final class StringUtils {
         return index == -1 ? missingDelimiterValue : str.substring(index + delimiter.length());
     }
 
+    public static boolean isSurrounded(String str, String prefix, String suffix) {
+        return str.startsWith(prefix) && str.endsWith(suffix);
+    }
+
     public static String removeSurrounding(String str, String delimiter) {
         return removeSurrounding(str, delimiter, delimiter);
     }
@@ -144,6 +148,13 @@ public final class StringUtils {
             return str;
         else
             return prefix + str;
+    }
+
+    public static String addSuffix(String str, String suffix) {
+        if (str.endsWith(suffix))
+            return str;
+        else
+            return str + suffix;
     }
 
     public static String removePrefix(String str, String... prefixes) {
@@ -201,5 +212,9 @@ public final class StringUtils {
         }
 
         return result;
+    }
+
+    public static String parseColorEscapes(String original) {
+        return original.replaceAll("\u00A7\\d", "");
     }
 }

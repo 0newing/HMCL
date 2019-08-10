@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.download.optifine;
 
@@ -46,11 +46,11 @@ public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVer
     }
 
     @Override
-    public Task refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
         GetTask task = new GetTask(NetworkUtils.toURL("http://bmclapi2.bangbang93.com/optifine/versionlist"));
-        return new Task() {
+        return new Task<Void>() {
             @Override
-            public Collection<Task> getDependents() {
+            public Collection<Task<?>> getDependents() {
                 return Collections.singleton(task);
             }
 
@@ -66,7 +66,7 @@ public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVer
                     if (!duplicates.add(mirror))
                         continue;
 
-                    boolean isPre = element.getPatch() != null && (element.getPatch().equals("pre") || element.getPatch().startsWith("alpha"));
+                    boolean isPre = element.getPatch() != null && (element.getPatch().startsWith("pre") || element.getPatch().startsWith("alpha"));
 
                     if (StringUtils.isBlank(element.getGameVersion()))
                         continue;

@@ -1,7 +1,7 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2018  huangyuhui <huanghongxun2008@126.com>
- * 
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -13,16 +13,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl.ui;
 
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
+import static org.jackhuang.hmcl.ui.FXUtils.newImage;
 
 public class WebStage extends Stage {
     private final WebView webView = new WebView();
@@ -30,7 +30,7 @@ public class WebStage extends Stage {
     public WebStage() {
         setScene(new Scene(webView, 800, 480));
         getScene().getStylesheets().addAll(config().getTheme().getStylesheets());
-        getIcons().add(new Image("/assets/img/icon.png"));
+        getIcons().add(newImage("/assets/img/icon.png"));
     }
 
     public WebView getWebView() {

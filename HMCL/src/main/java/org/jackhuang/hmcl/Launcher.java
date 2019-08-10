@@ -1,6 +1,6 @@
 /*
- * Hello Minecraft! Launcher.
- * Copyright (C) 2017  huangyuhui <huanghongxun2008@126.com>
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,11 +13,10 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see {http://www.gnu.org/licenses/}.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.jackhuang.hmcl;
 
-import com.jfoenix.concurrency.JFXUtilities;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
@@ -25,7 +24,9 @@ import org.jackhuang.hmcl.setting.ConfigHolder;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.upgrade.UpdateChecker;
-import org.jackhuang.hmcl.util.*;
+import org.jackhuang.hmcl.util.CrashReporter;
+import org.jackhuang.hmcl.util.Lang;
+import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.platform.OperatingSystem;
 
 import java.io.File;
@@ -39,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -49,25 +51,28 @@ public final class Launcher extends Application {
         Thread.currentThread().setUncaughtExceptionHandler(CRASH_REPORTER);
 
         try {
-            ConfigHolder.init();
-        } catch (IOException e) {
-            Main.showErrorAndExit(i18n("fatal.config_loading_failure", Paths.get("").toAbsolutePath().normalize()));
+            try {
+                ConfigHolder.init();
+            } catch (IOException e) {
+                Main.showErrorAndExit(i18n("fatal.config_loading_failure", Paths.get("").toAbsolutePath().normalize()));
+            }
+
+            // runLater to ensure ConfigHolder.init() finished initialization
+            Platform.runLater(() -> {
+                // When launcher visibility is set to "hide and reopen" without Platform.implicitExit = false,
+                // Stage.show() cannot work again because JavaFX Toolkit have already shut down.
+                Platform.setImplicitExit(false);
+                Controllers.initialize(primaryStage);
+                primaryStage.setResizable(false);
+                primaryStage.setScene(Controllers.getScene());
+
+                UpdateChecker.init();
+
+                primaryStage.show();
+            });
+        } catch (Throwable e) {
+            CRASH_REPORTER.uncaughtException(Thread.currentThread(), e);
         }
-
-        // runLater to ensure ConfigHolder.init() finished initialization
-        Platform.runLater(() -> {
-            // When launcher visibility is set to "hide and reopen" without Platform.implicitExit = false,
-            // Stage.show() cannot work again because JavaFX Toolkit have already shut down.
-            Platform.setImplicitExit(false);
-            Controllers.initialize(primaryStage);
-            primaryStage.setResizable(false);
-            primaryStage.setScene(Controllers.getScene());
-
-            UpdateChecker.init();
-
-            primaryStage.show();
-        });
-
     }
 
     public static void main(String[] args) {
@@ -94,7 +99,7 @@ public final class Launcher extends Application {
     public static void stopApplication() {
         LOG.info("Stopping application.\n" + StringUtils.getStackTrace(Thread.currentThread().getStackTrace()));
 
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             if (Controllers.getStage() == null)
                 return;
             Controllers.getStage().close();
@@ -108,7 +113,7 @@ public final class Launcher extends Application {
     public static void stopWithoutPlatform() {
         LOG.info("Stopping application without JavaFX Toolkit.\n" + StringUtils.getStackTrace(Thread.currentThread().getStackTrace()));
 
-        JFXUtilities.runInFX(() -> {
+        runInFX(() -> {
             if (Controllers.getStage() == null)
                 return;
             Controllers.getStage().close();

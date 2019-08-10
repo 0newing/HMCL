@@ -1,15 +1,31 @@
+/*
+ * Hello Minecraft! Launcher
+ * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package org.jackhuang.hmcl.mod;
 
 import com.google.gson.JsonParseException;
-import com.google.gson.annotations.SerializedName;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import org.jackhuang.hmcl.util.*;
+import org.jackhuang.hmcl.util.Logging;
+import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
-import org.jackhuang.hmcl.util.gson.Validation;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.Unzipper;
@@ -101,7 +117,7 @@ public class Datapack {
     }
 
     public void loadFromZip() throws IOException {
-        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(path)) {
+        try (FileSystem fs = CompressingUtils.readonly(path).setAutoDetectEncoding(true).build()) {
             Path datapacks = fs.getPath("/datapacks/");
             Path mcmeta = fs.getPath("pack.mcmeta");
             if (Files.exists(datapacks)) { // multiple datapacks
@@ -111,7 +127,7 @@ public class Datapack {
                 isMultiple = false;
                 try {
                     PackMcMeta pack = JsonUtils.fromNonNullJson(FileUtils.readText(mcmeta), PackMcMeta.class);
-                    info.add(new Pack(path, FileUtils.getNameWithoutExtension(path), pack.getPackInfo().getDescription(), this));
+                    Platform.runLater(() -> info.add(new Pack(path, FileUtils.getNameWithoutExtension(path), pack.getPackInfo().getDescription(), this)));
                 } catch (IOException | JsonParseException e) {
                     Logging.LOG.log(Level.WARNING, "Failed to read datapack " + path, e);
                 }
@@ -158,10 +174,8 @@ public class Datapack {
                             continue;
 
                         String name = FileUtils.getName(subDir);
-                        boolean enabled = true;
                         if (name.endsWith(".disabled")) {
                             name = name.substring(0, name.length() - ".disabled".length());
-                            enabled = false;
                         }
                         if (!name.endsWith(".zip"))
                             continue;
@@ -175,7 +189,7 @@ public class Datapack {
                 }
             }
 
-        this.info.setAll(info);
+        Platform.runLater(() -> this.info.setAll(info));
     }
 
     public static class Pack {
@@ -236,54 +250,6 @@ public class Datapack {
         }
     }
 
-    private static class PackMcMeta implements Validation {
-
-        @SerializedName("pack")
-        private final PackInfo pack;
-
-        public PackMcMeta() {
-            this(new PackInfo());
-        }
-
-        public PackMcMeta(PackInfo packInfo) {
-            this.pack = packInfo;
-        }
-
-        public PackInfo getPackInfo() {
-            return pack;
-        }
-
-        @Override
-        public void validate() throws JsonParseException {
-            if (pack == null)
-                throw new JsonParseException("pack cannot be null");
-        }
-
-        public static class PackInfo {
-            @SerializedName("pack_format")
-            private final int packFormat;
-
-            @SerializedName("description")
-            private final String description;
-
-            public PackInfo() {
-                this(0, "");
-            }
-
-            public PackInfo(int packFormat, String description) {
-                this.packFormat = packFormat;
-                this.description = description;
-            }
-
-            public int getPackFormat() {
-                return packFormat;
-            }
-
-            public String getDescription() {
-                return description;
-            }
-        }
-    }
 
     private static final String DISABLED_EXT = "disabled";
 }
